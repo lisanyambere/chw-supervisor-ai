@@ -1,0 +1,14 @@
+# Normalize line endings: LF in repo, platform-native on checkout
+* text=auto
+
+# Shell scripts must stay LF even on Windows
+*.sh text eol=lf
+*.py text eol=lf
+
+# Windows-only scripts can use CRLF
+*.ps1 text eol=crlf
+
+# Binary files
+*.jar binary
+*.png binary
+*.jpg binary
