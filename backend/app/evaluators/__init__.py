@@ -7,6 +7,11 @@ API key.
 
 Composite runner: `evaluate_briefing(result)` returns a list of scores.
 """
+from app.evaluators.judge import (
+    evaluate_briefing_with_judges,
+    judge_action_orientation,
+    judge_citation_discipline,
+)
 from app.evaluators.scorers import (
     EvalScore,
     conciseness,
@@ -22,7 +27,10 @@ __all__ = [
     "conciseness",
     "entity_grounding",
     "evaluate_briefing",
+    "evaluate_briefing_with_judges",
     "iteration_efficiency",
+    "judge_action_orientation",
+    "judge_citation_discipline",
     "numeric_fidelity",
     "plan_minimality",
 ]
