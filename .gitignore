@@ -36,3 +36,10 @@ data/synthea/*.jar
 # OS
 .DS_Store
 Thumbs.db
+
+# Local debug / scratch
+*.log
+load.out
+load.err
+tmp_*.txt
+tmp_*.json

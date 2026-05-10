@@ -89,8 +89,8 @@ services separately to avoid pressure:
 
 ## Phase 1 — Synthetic data
 
-- [ ] Run Synthea (~500 patients, FHIR R4)
-- [ ] Kenyan localization post-processing (names, addresses, demographics)
-- [ ] CHW activity overlay with 7 seeded scenarios
-- [ ] FHIR bulk load into OpenMRS
-- [ ] Smoke test: query REST + FHIR for expected patients/CHWs
+- [x] Run Synthea (~500 patients, FHIR R4)
+- [x] Kenyan localization post-processing (names, addresses, demographics)
+- [x] CHW activity overlay with 7 seeded scenarios
+- [x] FHIR bulk load into OpenMRS — see [`docs/data-loading.md`](docs/data-loading.md)
+- [x] Smoke test: query REST + FHIR for expected patients/CHWs
