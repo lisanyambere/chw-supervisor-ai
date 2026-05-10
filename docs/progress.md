@@ -187,6 +187,37 @@ working as intended (strict). `plan_minimality` dings cases where the agent
 called `list_chws` to resolve an id it could have inferred — useful signal
 for a future system-prompt tweak.
 
+### Tool surface — round 2 ✅
+
+Five new tools landed in this slice. All registered via the existing `@tool`
+decorator and wired into the briefing agent automatically.
+
+| Tool | What it answers |
+|---|---|
+| `chw_inactivity(days, max_count=0)` | "Who hasn't logged anything?" — returns CHWs at or below a threshold. Parallel FHIR counts via `asyncio.gather` |
+| `visits_by_day(days, chw_id?)` | Daily encounter histogram, team-wide or per-CHW. Catches Friday slumps, weekend gaps, sudden drops |
+| `chw_patient_panel(chw_id, days, limit)` | Distinct patients a CHW has visited recently, with per-patient counts and last-encounter date |
+| `find_patient(query, limit)` | Name-based Patient search so the supervisor can ask about people, not UUIDs |
+| `recent_deaths(days, limit)` | Patients with `deceased` set in the window — explains caseload drops |
+
+**Live verification (10 May 2026):**
+- *"Which CHWs are completely inactive in the last 7 days, and what's the daily
+  trend?"* → agent called `team_activity_summary` + `chw_inactivity` +
+  `visits_by_day` in parallel and correctly diagnosed a team-wide stoppage on
+  May 1 (the seeded data ends there). The `visits_by_day` series is what made
+  the model reach the right conclusion instead of blaming individual CHWs.
+- *"chw-009's patient panel last 30 days"* → 20 distinct patients with
+  per-patient encounter counts and last-seen timestamps. Two-tool plan:
+  `team_activity_summary` then `chw_patient_panel`.
+
+**Known follow-up:** `recent_deaths` returns 0 because the Phase-1 loader
+dropped all 81 deceased Synthea patients on HTTP 422 — OpenMRS requires a
+`causeOfDeath` field that the localized bundles don't provide. The tool itself
+is correct (unit-tested); the data backfill is its own task.
+
+**Tests:** 43/43 passing (29 prior + 14 new across `test_tools_chw.py` and the
+new `test_tools_patient.py`).
+
 ### Next
 
 - **More tools** — overdue ANC visits, immunization gaps, defaulters, time
