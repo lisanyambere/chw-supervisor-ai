@@ -254,29 +254,71 @@ posted to Langfuse per trace via `lf.create_score(trace_id=...)`.
 
 **Tests:** 55/55 passing (43 prior + 12 new in `test_evaluator_judges.py`).
 
-### Next
-
-- **More tools** — overdue ANC visits, immunization gaps, defaulters, time
-  since last home visit, visits per day.
-- **Multi-agent split** — supervisor briefing agent + patient lookup agent,
-  orchestrated with LangGraph.
-- **Frontend** — wire the existing `frontend/` Next.js scaffold to `/briefing`.
-- **Docker packaging** — replace local uvicorn with a container in
-  `infra/docker-compose.yml`.
-
 ---
 
-## Phase 3 — Multi-agent + frontend (planned)
+## Phase 4 — Supervisor workspace frontend (in progress)
 
-(Superseded by the in-progress Phase 3 section above for the evaluator slice.
-This block is kept as the longer-term roadmap.)
+Goal: stand up the visible product. Until now the agent only existed as
+`curl localhost:8001/briefing`; this phase ports the design-handoff
+prototype (`docs/design_handoff/`) into a real Next.js app so the briefing,
+the tool plan, and every CHW the model names are inspectable from a
+browser.
+
+**Backend changes shipped to support the UI** (commit `e31b4c2`):
+- `TraceEvent.ms` + new `BriefingResult.plan` — every tool call is wall-clock
+  timed via `time.perf_counter()` and paired with its `tool_result`. The
+  derived `PlanStep(tool, args, ms, rows)` is what the UI's plan-timeline
+  card consumes; no client-side derivation needed.
+- New `app/agents/formatter.py` — second LLM pass that re-renders the
+  agent's markdown answer into the typed schema from the design handoff
+  (`headline / period / sections[stat-row|callout|ranked|panel] / sources`).
+  Strict JSON mode, defensive parse, opt-out via `include_answer_doc=false`
+  for cheap markdown-only runs. The markdown answer stays as a fallback so
+  old callers keep working.
+- `/briefing` now returns `{answer, answer_doc, plan, trace, trace_id, ...}`.
+- CORS allowlist for `localhost:3000` + `127.0.0.1:3000`.
+
+**Frontend** — Next.js 15 (App Router) + Tailwind 3 + self-hosted Inter
+Tight / Source Serif 4 / JetBrains Mono via `next/font`. All design-handoff
+oklch colour tokens wired through CSS variables and exposed to Tailwind.
+Components landed so far, each in its own commit:
+
+| commit | scope |
+|---|---|
+| `af640f2` | scaffold + design tokens |
+| `d534ae5` | typed `/briefing` API client |
+| `3a401a2` | app shell — sidebar + topbar |
+| `bf589fc` | empty-state hero + suggestion grid |
+| `b323d88` | sticky composer with auto-grow textarea |
+| `ef591f0` | tool-plan timeline (running / done state machine) |
+| `1de131a` | typed answer renderer (4 section kinds + chw chips + trace footer) |
+| `0665b55` | conversation turns wired to live `/briefing` |
+
+End-to-end works: clicking "Generate Monday briefing" hits the backend,
+shows a placeholder thinking row, then swaps in the real plan card with
+backend-measured ms timings and the structured answer with grounded
+`chw-NNN` chips. Every answer card carries a `trace · {short_id} ↗` link
+to the Langfuse trace it came from.
+
+### Next (Phase 4 continuation)
+
+- **CHW detail drawer** — right-side `Sheet`, opened by any `chw-NNN` chip
+  or `.ranked__row`. Pulls `count_chw_encounters` + `chw_patient_panel`
+  for the selected CHW.
+- **Activity charts view** — 30-bar daily encounter chart with weekend
+  tinting and red zero-day bars; first non-conversational view.
+- **CHW roster view** — full 30-row reuse of the ranked-row pattern.
+- **SSE streaming** — replace the placeholder thinking row with a real
+  `/briefing/stream` endpoint that emits `tool_start` / `tool_done` /
+  `response` events so the plan timeline ticks live.
+- **Persistence** — drop the conversation reducer into a small KV store
+  (Postgres or just localStorage to start) so reloads don't wipe history.
+
+### Phase 5+ roadmap
 
 - **More tools** — overdue ANC visits, immunization gaps, defaulters, time
   since last home visit, visits per day.
 - **Multi-agent split** — supervisor briefing agent + patient lookup agent,
   orchestrated with LangGraph.
-- **Evaluators** — `app/evaluators/` scoring each response on groundedness,
-  citation discipline, and tool-plan sanity. Push scores to Langfuse.
-- **Frontend** — wire the existing `frontend/` Next.js scaffold to `/briefing`.
 - **Docker packaging** — replace local uvicorn with a container in
-  `infra/docker-compose.yml`.
+  `infra/docker-compose.yml`; add a `frontend` service mapping `3000:3000`.
