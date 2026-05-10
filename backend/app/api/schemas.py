@@ -24,6 +24,13 @@ class BriefingRequest(BaseModel):
     )
     max_iterations: int = Field(default=6, ge=1, le=12)
     include_trace: bool = Field(default=True)
+    include_answer_doc: bool = Field(
+        default=True,
+        description=(
+            "Also run the structured-answer formatter and return `answer_doc`. "
+            "Adds one extra LLM call; turn off for cheap, markdown-only runs."
+        ),
+    )
     lookback_days: int | None = Field(
         default=None,
         ge=1,
@@ -42,6 +49,26 @@ class TraceEntry(BaseModel):
     arguments: dict[str, Any] | None = None
     result: Any | None = None
     content: str | None = None
+    ms: int | None = None
+
+
+class PlanStepOut(BaseModel):
+    """Compact representation of one tool execution for the UI timeline."""
+
+    tool: str
+    args: str  # already-rendered, e.g. "(days=30)"
+    ms: int
+    rows: int
+
+
+class AnswerDocOut(BaseModel):
+    """Structured answer matching the design-handoff schema. The frontend
+    renders this directly; the markdown `answer` field is kept as a fallback."""
+
+    headline: str
+    period: str = ""
+    sections: list[dict[str, Any]] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
 
 
 class BriefingResponse(BaseModel):
@@ -49,3 +76,8 @@ class BriefingResponse(BaseModel):
     iterations: int
     tool_calls: int
     trace: list[TraceEntry] = Field(default_factory=list)
+    plan: list[PlanStepOut] = Field(default_factory=list)
+    trace_id: str | None = None
+    # New: structured answer for the UI. Optional so the endpoint can skip
+    # the second LLM call (and its latency cost) when the caller asks.
+    answer_doc: AnswerDocOut | None = None

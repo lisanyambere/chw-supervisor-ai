@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -54,6 +55,24 @@ class TraceEvent:
     arguments: dict[str, Any] | None = None
     result: Any = None
     content: str | None = None
+    # Wall-clock duration of a tool call in milliseconds. Only populated on
+    # `tool_result` events; the matched `tool_call` event mirrors it for
+    # convenience when the UI iterates calls in order.
+    ms: int | None = None
+
+
+@dataclass
+class PlanStep:
+    """One row of the live tool-execution timeline.
+
+    Mirrors the design-handoff schema so the frontend can render a plan card
+    without any client-side derivation.
+    """
+
+    tool: str
+    args: str  # already-rendered, e.g. "(days=30)"
+    ms: int
+    rows: int  # best-effort row count of the tool result
 
 
 @dataclass
@@ -65,6 +84,9 @@ class BriefingResult:
     # Langfuse trace id (when observability is enabled), so callers can attach
     # post-hoc evaluator scores to the same trace.
     trace_id: str | None = None
+    # Compact, ordered list of tool executions — derived from `trace` at
+    # build time so /briefing consumers don't have to do it themselves.
+    plan: list[PlanStep] = field(default_factory=list)
 
 
 async def run_briefing(
@@ -102,6 +124,8 @@ async def run_briefing(
                 lookback_days=lookback_days,
                 lf=lf,
             )
+            # Always derive a plan, with or without Langfuse.
+            result.plan = _derive_plan(result.trace)
             if agent_span is not None:
                 try:
                     # Capture trace id so the caller can attach evaluator scores.
@@ -141,6 +165,79 @@ class _NullCM:
 
     def __exit__(self, *exc: object) -> None:
         return None
+
+
+def _format_args(args: dict[str, Any] | None) -> str:
+    """Render tool arguments the way the design handoff shows them.
+
+    Examples:
+      {}                    -> "()"
+      {"days": 30}          -> "(days=30)"
+      {"chw_id": "chw-002"} -> '(chw_id="chw-002")'
+    """
+    if not args:
+        return "()"
+    parts: list[str] = []
+    for k, v in args.items():
+        if isinstance(v, str):
+            parts.append(f'{k}="{v}"')
+        else:
+            parts.append(f"{k}={v}")
+    return "(" + ", ".join(parts) + ")"
+
+
+def _row_count(result: Any) -> int:
+    """Best-effort row count for a tool result.
+
+    Tools generally return either a list, a dict with a `rows`/`results`/`items`
+    list, or a dict with `total`. Falls back to 1 for scalars.
+    """
+    if result is None:
+        return 0
+    if isinstance(result, list):
+        return len(result)
+    if isinstance(result, dict):
+        for key in ("rows", "results", "items", "data", "chws", "patients"):
+            v = result.get(key)
+            if isinstance(v, list):
+                return len(v)
+        if isinstance(result.get("total"), int):
+            return int(result["total"])
+        # Single-stat payloads still count as 1 row of evidence.
+        return 1
+    return 1
+
+
+def _derive_plan(trace: list[TraceEvent]) -> list[PlanStep]:
+    """Walk the trace and pair each tool_call with its tool_result.
+
+    Order is preserved. We key by name + arguments to match the pair, which
+    handles the common case of parallel calls with distinct args. If the
+    same (name, args) is called twice in one turn, we just consume them in
+    FIFO order — plan steps stay 1:1 with tool calls.
+    """
+    steps: list[PlanStep] = []
+    pending_results: list[TraceEvent] = [
+        e for e in trace if e.kind == "tool_result"
+    ]
+    by_name: dict[str, list[TraceEvent]] = {}
+    for r in pending_results:
+        by_name.setdefault(r.name or "", []).append(r)
+
+    for ev in trace:
+        if ev.kind != "tool_call":
+            continue
+        bucket = by_name.get(ev.name or "", [])
+        result_ev = bucket.pop(0) if bucket else None
+        steps.append(
+            PlanStep(
+                tool=ev.name or "",
+                args=_format_args(ev.arguments),
+                ms=int(ev.ms or (result_ev.ms if result_ev else 0) or 0),
+                rows=_row_count(result_ev.result if result_ev else None),
+            )
+        )
+    return steps
 
 
 async def _run_briefing_inner(
@@ -232,8 +329,9 @@ async def _run_briefing_inner(
         calls = msg.tool_calls
         log.info("agent.tools", count=len(calls))
 
-        async def _run(call: Any) -> tuple[str, str, dict[str, Any], Any]:
+        async def _run(call: Any) -> tuple[str, str, dict[str, Any], Any, int]:
             args = json.loads(call.function.arguments or "{}")
+            t0 = time.perf_counter()
             if lf is not None:
                 with lf.start_as_current_observation(
                     name=f"tool.{call.function.name}",
@@ -247,17 +345,18 @@ async def _run_briefing_inner(
                         pass
             else:
                 result = await execute(call.function.name, args, fhir)
-            return call.id, call.function.name, args, result
+            ms = int((time.perf_counter() - t0) * 1000)
+            return call.id, call.function.name, args, result, ms
 
         results = await asyncio.gather(*(_run(c) for c in calls))
 
-        for call_id, name, args, result in results:
+        for call_id, name, args, result, ms in results:
             tool_calls += 1
             trace.append(
-                TraceEvent(kind="tool_call", name=name, arguments=args)
+                TraceEvent(kind="tool_call", name=name, arguments=args, ms=ms)
             )
             trace.append(
-                TraceEvent(kind="tool_result", name=name, result=result)
+                TraceEvent(kind="tool_result", name=name, result=result, ms=ms)
             )
             messages.append(
                 {

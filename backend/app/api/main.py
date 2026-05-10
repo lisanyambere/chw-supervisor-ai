@@ -6,12 +6,15 @@ from collections.abc import AsyncIterator
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
-from app.agents import run_briefing
+from app.agents import format_answer, run_briefing
 from app.api.schemas import (
+    AnswerDocOut,
     BriefingRequest,
     BriefingResponse,
     HealthResponse,
+    PlanStepOut,
     TraceEntry,
 )
 from app.core import configure_logging, get_logger, get_settings
@@ -49,6 +52,20 @@ app = FastAPI(
     title="Community Health AI Assistant",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+# Allow the Next.js dev server (and a future docker frontend) to call us
+# from the browser without bouncing through a proxy. The list is small and
+# explicit; production should override via an env var if needed.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 
@@ -107,9 +124,24 @@ async def briefing(
         if req.include_trace
         else []
     )
+
+    answer_doc: AnswerDocOut | None = None
+    if req.include_answer_doc:
+        try:
+            doc = await format_answer(result, req.question)
+            answer_doc = AnswerDocOut(**doc.to_dict())
+        except Exception as e:  # noqa: BLE001
+            # Formatter is best-effort — never fail the whole request because
+            # the second pass tripped. The caller still has `answer` (markdown)
+            # and `plan` to render with.
+            log.warning("formatter.failed", error=str(e))
+
     return BriefingResponse(
         answer=result.answer,
         iterations=result.iterations,
         tool_calls=result.tool_calls,
         trace=trace,
+        plan=[PlanStepOut(**vars(s)) for s in result.plan],
+        trace_id=result.trace_id,
+        answer_doc=answer_doc,
     )
