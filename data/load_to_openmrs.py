@@ -31,6 +31,7 @@ from urllib.request import Request, urlopen
 
 OPENMRS_BASE = "http://localhost:8080/openmrs"
 FHIR_BASE    = f"{OPENMRS_BASE}/ws/fhir2/R4"
+REST_BASE    = f"{OPENMRS_BASE}/ws/rest/v1"
 USERNAME     = "admin"
 PASSWORD     = "Admin123"
 
@@ -48,6 +49,11 @@ PATIENT_IDENTIFIER_TYPE_UUID = "22348099-3873-459e-a32e-d93b17eda533"
 ENCOUNTER_TYPE_VISIT_NOTE_UUID = "d7151f82-c1f3-4152-a605-2f9ea7414a79"
 # OpenMRS default "Unknown" EncounterRole — required on every participant.
 ENCOUNTER_ROLE_UNKNOWN_UUID = "a0b03050-c99b-11e0-9572-0800200c9a66"
+# CIEL concept used as the default cause of death for Synthea-derived deaths.
+# OpenMRS core's PatientValidator requires a non-null causeOfDeath whenever
+# dead=true, but the FHIR R4 Patient resource has no equivalent field, so we
+# can't satisfy the validator on the FHIR POST. Backfill via REST instead.
+DEATH_CAUSE_UNKNOWN_UUID = "142917AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"  # "Death of unknown cause"
 
 SYNTHEA_ID_SYSTEM = "https://github.com/synthetichealth/synthea"
 CHW_ID_SYSTEM     = "http://community-health-ai/chw-id"
@@ -129,9 +135,14 @@ def check_openmrs() -> bool:
 # Resource shaping
 # ---------------------------------------------------------------------------
 
-def shape_patient(patient: dict) -> tuple[str, dict]:
+def shape_patient(patient: dict) -> tuple[str, dict, str | None]:
     """Strip server-assignable fields, ensure a preferred identifier.
-    Returns (synthea_uuid, cleaned_resource).
+    Returns (synthea_uuid, cleaned_resource, deceased_date_or_None).
+
+    The deceasedDateTime is captured for a follow-up REST backfill
+    (see post_death_info) and stripped from the FHIR payload, since OpenMRS
+    core's PatientValidator rejects dead=true without a causeOfDeath value
+    that the FHIR R4 Patient model can't carry.
     """
     synthea_uuid = patient.get("id", "")
 
@@ -159,10 +170,14 @@ def shape_patient(patient: dict) -> tuple[str, dict]:
     patient.pop("maritalStatus", None)
     # Synthea + custom extensions don't map to known person attribute types.
     patient.pop("extension", None)
-    # Deceased flag triggers OpenMRS validator requiring causeOfDeath; drop it.
-    patient.pop("deceasedBoolean", None)
-    patient.pop("deceasedDateTime", None)
-    return synthea_uuid, patient
+    # Capture and strip the deceased markers — we backfill via REST after
+    # the FHIR POST succeeds, with a default causeOfDeath concept.
+    deceased_date = patient.pop("deceasedDateTime", None)
+    deceased_bool = patient.pop("deceasedBoolean", None)
+    if not deceased_date and deceased_bool:
+        # Synthea always carries a date when dead, but be defensive.
+        deceased_date = ""  # marker = "dead but date unknown"
+    return synthea_uuid, patient, deceased_date
 
 
 def shape_practitioner(practitioner: dict) -> tuple[str, dict]:
@@ -268,35 +283,39 @@ def collect_chw_resources(chw_dir: Path):
 # Phases
 # ---------------------------------------------------------------------------
 
-def post_patients(patients: list) -> dict:
+def post_patients(patients: list) -> tuple[dict, dict]:
+    """POST patients via FHIR. Returns (synthea_uuid → server_uuid, server_uuid → death_date)."""
     mapping: dict = {}
+    deaths: dict = {}
     failures: list = []
 
     def task(p):
-        synthea_uuid, shaped = shape_patient(dict(p))
+        synthea_uuid, shaped, deceased_date = shape_patient(dict(p))
         ok, body, err = fhir_post("Patient", shaped)
         if ok and body:
-            return synthea_uuid, body.get("id"), ""
+            return synthea_uuid, body.get("id"), deceased_date, ""
         # Idempotency: if already loaded, look up existing UUID by identifier value
         if "already in use" in err:
             existing = fhir_search_first_id("Patient", {"identifier": synthea_uuid})
             if existing:
-                return synthea_uuid, existing, ""
-        return synthea_uuid, None, err
+                return synthea_uuid, existing, deceased_date, ""
+        return synthea_uuid, None, deceased_date, err
 
     print(f"  POST Patient x {len(patients)}")
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:
         futures = [ex.submit(task, p) for p in patients]
         done = 0
         for fut in as_completed(futures):
-            synthea_uuid, server_uuid, err = fut.result()
+            synthea_uuid, server_uuid, deceased_date, err = fut.result()
             if server_uuid:
                 mapping[synthea_uuid] = server_uuid
+                if deceased_date is not None:
+                    deaths[server_uuid] = deceased_date
             else:
                 failures.append((synthea_uuid, err))
             done += 1
             if done % 50 == 0 or done == len(patients):
-                print(f"    {done}/{len(patients)} ok={len(mapping)} fail={len(failures)}")
+                print(f"    {done}/{len(patients)} ok={len(mapping)} fail={len(failures)} dead={len(deaths)}")
 
     if failures:
         print(f"  Sample failure: {failures[0]}")
@@ -309,7 +328,103 @@ def post_patients(patients: list) -> dict:
                     fh.write(f"{syn}\t{e}\n")
         except Exception:
             pass
-    return mapping
+    return mapping, deaths
+
+
+def rest_post(path: str, payload: dict) -> tuple[bool, str]:
+    """POST to /ws/rest/v1/<path>. Returns (ok, error_msg)."""
+    url = f"{REST_BASE}/{path.lstrip('/')}"
+    body = json.dumps(payload).encode()
+    req = Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": auth_header(),
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(req, timeout=30) as resp:
+            resp.read()
+        return True, ""
+    except HTTPError as e:
+        try:
+            err_body = e.read().decode("utf-8", errors="replace")[:500]
+        except Exception:
+            err_body = ""
+        return False, f"HTTP {e.code}: {err_body}"
+    except URLError as e:
+        return False, f"URLError: {e}"
+
+
+def _normalise_death_date(value: str) -> str:
+    """Coerce a FHIR deceasedDateTime to the ISO8601 form OpenMRS REST accepts.
+
+    OpenMRS REST wants milliseconds + zone, e.g. 2012-12-19T05:40:47.000+0000.
+    Accept whatever Synthea emits, including the date-only and offset forms.
+    """
+    from datetime import datetime
+    if not value:
+        return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+    s = value.strip()
+    # Normalise trailing Z to +00:00 for fromisoformat.
+    iso = s.replace("Z", "+00:00")
+    try:
+        # Date-only string: 1952-06-01
+        if len(iso) == 10:
+            dt = datetime.fromisoformat(iso + "T00:00:00+00:00")
+        else:
+            dt = datetime.fromisoformat(iso)
+    except ValueError:
+        return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+    # Render as UTC with the trailing-zero offset OpenMRS prefers.
+    if dt.utcoffset() is not None:
+        from datetime import timezone
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+
+
+def post_death_info(deaths: dict) -> tuple[int, int]:
+    """Backfill dead=true + deathDate + causeOfDeath via REST for the patients
+    Synthea marked deceased. Idempotent: re-running on an already-dead patient
+    is a no-op from the validator's perspective.
+    """
+    if not deaths:
+        print("  (no deceased patients to backfill)")
+        return 0, 0
+
+    print(f"  REST POST person.dead x {len(deaths)}")
+    ok = fail = 0
+    failures: list = []
+
+    def task(server_uuid: str, raw_date: str) -> tuple[str, bool, str]:
+        payload = {
+            "dead": True,
+            "deathDate": _normalise_death_date(raw_date),
+            "causeOfDeath": DEATH_CAUSE_UNKNOWN_UUID,
+        }
+        success, err = rest_post(f"person/{server_uuid}", payload)
+        return server_uuid, success, err
+
+    with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+        futures = [ex.submit(task, uuid, d) for uuid, d in deaths.items()]
+        done = 0
+        for fut in as_completed(futures):
+            uuid, success, err = fut.result()
+            if success:
+                ok += 1
+            else:
+                fail += 1
+                if len(failures) < 3:
+                    failures.append((uuid, err))
+            done += 1
+            if done % 25 == 0 or done == len(deaths):
+                print(f"    {done}/{len(deaths)} ok={ok} fail={fail}")
+    for uuid, err in failures:
+        print(f"    Sample failure: {uuid} → {err}")
+    return ok, fail
 
 
 def post_practitioners(practitioners: list) -> dict:
@@ -416,7 +531,10 @@ def main() -> None:
 
     print("Phase 1 - Patients")
     patients = collect_patients(localized_dir)
-    patient_map = post_patients(patients)
+    patient_map, deaths = post_patients(patients)
+
+    print("\nPhase 1b - Death backfill")
+    death_ok, death_fail = post_death_info(deaths)
 
     print("\nPhase 2 - CHW Practitioners")
     practitioners, encounters = collect_chw_resources(chw_dir)
@@ -434,6 +552,7 @@ def main() -> None:
 
     print("\nSummary:")
     print(f"  Patients      ok={len(patient_map)}/{len(patients)}")
+    print(f"  Deaths        ok={death_ok}/{len(deaths)} (fail={death_fail})")
     print(f"  Practitioners ok={len(chw_map)}/{len(practitioners)}")
     print(f"  Encounters    ok={enc_ok}/{len(encounters)} (fail={enc_fail}, skipped={enc_skip})")
 

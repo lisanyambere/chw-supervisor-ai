@@ -210,10 +210,19 @@ decorator and wired into the briefing agent automatically.
   per-patient encounter counts and last-seen timestamps. Two-tool plan:
   `team_activity_summary` then `chw_patient_panel`.
 
-**Known follow-up:** `recent_deaths` returns 0 because the Phase-1 loader
-dropped all 81 deceased Synthea patients on HTTP 422 — OpenMRS requires a
-`causeOfDeath` field that the localized bundles don't provide. The tool itself
-is correct (unit-tested); the data backfill is its own task.
+**Data fix — deceased patient backfill (10 May 2026):** `recent_deaths`
+initially returned 0 because the Phase-1 loader was silently stripping
+`deceasedDateTime` to dodge the 422 — OpenMRS core's `PatientValidator`
+requires a `causeOfDeath` concept whenever `dead=true`, but the FHIR R4
+Patient resource (and the FHIR2 module's translator) has no such field, so
+the validator can never be satisfied through FHIR alone. Fixed by making the
+loader two-pass: POST the Patient via FHIR (alive), then POST `{dead,
+deathDate, causeOfDeath}` to `/ws/rest/v1/person/{uuid}` with a default
+"Death of unknown cause" concept (`142917AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`).
+Re-ran loader: 81/81 deaths backfilled, FHIR `Patient?death-date=` now
+returns the full set, and the agent answers *"Have there been any patient
+deaths in the last year?"* with **7 deaths**, named, dated, and bucketed by
+sub-county.
 
 **Tests:** 43/43 passing (29 prior + 14 new across `test_tools_chw.py` and the
 new `test_tools_patient.py`).
