@@ -224,15 +224,40 @@ returns the full set, and the agent answers *"Have there been any patient
 deaths in the last year?"* with **7 deaths**, named, dated, and bucketed by
 sub-county.
 
-**Tests:** 43/43 passing (29 prior + 14 new across `test_tools_chw.py` and the
-new `test_tools_patient.py`).
+**LLM-as-judge scorers (10 May 2026):** added two judge metrics that
+complement the deterministic ones — `judge_action_orientation` (does the
+answer name a concrete next step?) and `judge_citation_discipline` (is every
+claim traceable to the trace?). Implemented in `app/evaluators/judge.py`
+as async scorers that call the configured LLM in JSON mode
+(`response_format={"type": "json_object"}`); they share the agent's provider
+so swapping to a stronger judge model is just an env change. Trace events
+are summarised into a budgeted text block (per-result 2.5kB, total 8kB) so
+the judge can verify list-style results without the prompt blowing up.
+Unit-tested with an injectable `judge_fn` stub — no network required.
+
+Live baseline across all 5 golden questions:
+
+| metric | mean |
+|---|---|
+| numeric_fidelity        | 0.98 |
+| entity_grounding        | 1.00 |
+| plan_minimality         | 0.78 |
+| conciseness             | 1.00 |
+| iteration_efficiency    | 0.76 |
+| **judge_action_orientation** | **0.98** |
+| **judge_citation_discipline** | **0.98** |
+
+Both judges correctly singled out the most complex question ("anything
+unusual?") as the weakest at 0.90, while giving focused lookups 1.00 — the
+rubric is calibrated, not just a thumbs-up generator. All 7 scores are
+posted to Langfuse per trace via `lf.create_score(trace_id=...)`.
+
+**Tests:** 55/55 passing (43 prior + 12 new in `test_evaluator_judges.py`).
 
 ### Next
 
 - **More tools** — overdue ANC visits, immunization gaps, defaulters, time
   since last home visit, visits per day.
-- **LLM-as-judge** evaluators for action-orientation and citation discipline,
-  scored async after each run.
 - **Multi-agent split** — supervisor briefing agent + patient lookup agent,
   orchestrated with LangGraph.
 - **Frontend** — wire the existing `frontend/` Next.js scaffold to `/briefing`.

@@ -31,7 +31,11 @@ if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
 from app.agents.briefing import run_briefing  # noqa: E402
-from app.evaluators import EvalScore, evaluate_briefing  # noqa: E402
+from app.evaluators import (  # noqa: E402
+    EvalScore,
+    evaluate_briefing,
+    evaluate_briefing_with_judges,
+)
 from app.observability import get_langfuse  # noqa: E402
 
 
@@ -85,8 +89,13 @@ def _fmt_score(s: EvalScore) -> str:
     return f"  {s.name:<22} {bar} {s.value:.2f}  {s.comment}"
 
 
-async def _run_one(q: GoldenQuestion, *, push_to_langfuse: bool) -> tuple[GoldenQuestion, list[EvalScore], str | None]:
-    print(f"\n── {q.id} ─────────────────────────────────────")
+async def _run_one(
+    q: GoldenQuestion,
+    *,
+    push_to_langfuse: bool,
+    use_judges: bool,
+) -> tuple[GoldenQuestion, list[EvalScore], str | None]:
+    print(f"\n── {q.id} ───────────────────────────────────────")
     print(f"Q: {q.question}")
     print(f"hint: {q.expected_hint}")
 
@@ -101,6 +110,15 @@ async def _run_one(q: GoldenQuestion, *, push_to_langfuse: bool) -> tuple[Golden
     scores = evaluate_briefing(
         result, expected_max_tool_calls=q.expected_max_tool_calls
     )
+    if use_judges:
+        try:
+            judge_scores = await evaluate_briefing_with_judges(
+                result, question=q.question
+            )
+            scores = scores + judge_scores
+        except Exception as e:  # noqa: BLE001
+            print(f"  ↳ LLM judges failed: {e}")
+
     print("\nScores:")
     for s in scores:
         print(_fmt_score(s))
@@ -146,7 +164,11 @@ def _print_summary(rows: list[tuple[GoldenQuestion, list[EvalScore], str | None]
     print(f"{'MEAN':<22} {means}")
 
 
-async def _main_async(question_ids: list[str] | None, push_to_langfuse: bool) -> int:
+async def _main_async(
+    question_ids: list[str] | None,
+    push_to_langfuse: bool,
+    use_judges: bool,
+) -> int:
     if question_ids:
         chosen = [q for q in GOLDEN if q.id in question_ids]
         if not chosen:
@@ -162,7 +184,13 @@ async def _main_async(question_ids: list[str] | None, push_to_langfuse: bool) ->
 
     rows = []
     for q in chosen:
-        rows.append(await _run_one(q, push_to_langfuse=push_to_langfuse))
+        rows.append(
+            await _run_one(
+                q,
+                push_to_langfuse=push_to_langfuse,
+                use_judges=use_judges,
+            )
+        )
     _print_summary(rows)
 
     # Exit non-zero if any score is below 0.5 — useful in CI.
@@ -183,9 +211,18 @@ def main() -> None:
         action="store_true",
         help="Skip pushing scores to Langfuse.",
     )
+    p.add_argument(
+        "--no-judges",
+        action="store_true",
+        help="Skip the LLM-as-judge scorers (deterministic only).",
+    )
     args = p.parse_args()
     code = asyncio.run(
-        _main_async(args.question, push_to_langfuse=not args.no_langfuse)
+        _main_async(
+            args.question,
+            push_to_langfuse=not args.no_langfuse,
+            use_judges=not args.no_judges,
+        )
     )
     raise SystemExit(code)
 
