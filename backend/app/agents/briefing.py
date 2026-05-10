@@ -62,6 +62,9 @@ class BriefingResult:
     trace: list[TraceEvent] = field(default_factory=list)
     iterations: int = 0
     tool_calls: int = 0
+    # Langfuse trace id (when observability is enabled), so callers can attach
+    # post-hoc evaluator scores to the same trace.
+    trace_id: str | None = None
 
 
 async def run_briefing(
@@ -101,12 +104,28 @@ async def run_briefing(
             )
             if agent_span is not None:
                 try:
+                    # Capture trace id so the caller can attach evaluator scores.
+                    tid = getattr(agent_span, "trace_id", None)
+                    if tid:
+                        result.trace_id = str(tid)
+                    tool_plan = [
+                        e.name
+                        for e in result.trace
+                        if e.kind == "tool_call" and e.name
+                    ]
                     agent_span.update(
                         output={
                             "answer": result.answer,
                             "iterations": result.iterations,
                             "tool_calls": result.tool_calls,
-                        }
+                            "tool_plan": tool_plan,
+                        },
+                        metadata={
+                            "lookback_days": lookback_days,
+                            "provider": llm.provider,
+                            "model": llm.model,
+                            "tool_plan": tool_plan,
+                        },
                     )
                 except Exception:  # noqa: BLE001
                     pass
@@ -149,13 +168,36 @@ async def _run_briefing_inner(
                 as_type="generation",
                 model=llm.model,
                 input=messages,
+                metadata={"iteration": iteration, "provider": llm.provider},
             ) as gen:
                 completion = await llm.chat(messages=messages, tools=tools)
                 try:
+                    msg_dump = completion.choices[0].message.model_dump(
+                        exclude_none=True
+                    )
+                    # Surface model "reasoning" if the provider returned it
+                    # (gpt-5 family + o-series via Azure, some OpenRouter models),
+                    # plus a compact tool-plan for easy filtering in Langfuse.
+                    reasoning = (
+                        msg_dump.get("reasoning")
+                        or msg_dump.get("reasoning_content")
+                    )
+                    plan = [
+                        tc["function"]["name"]
+                        for tc in msg_dump.get("tool_calls") or []
+                        if isinstance(tc, dict) and tc.get("function")
+                    ]
+                    gen_meta: dict[str, Any] = {
+                        "iteration": iteration,
+                        "provider": llm.provider,
+                    }
+                    if plan:
+                        gen_meta["tool_plan"] = plan
+                    if reasoning:
+                        gen_meta["reasoning"] = reasoning
                     gen.update(
-                        output=completion.choices[0].message.model_dump(
-                            exclude_none=True
-                        ),
+                        output=msg_dump,
+                        metadata=gen_meta,
                         usage_details=(
                             {
                                 "input": completion.usage.prompt_tokens,
