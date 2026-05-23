@@ -21,7 +21,7 @@ from app.core import configure_logging, get_logger, get_settings
 from app.fhir import FhirClient, get_id_map
 from app.llm import get_llm
 from app.observability import aflush as langfuse_flush
-from app.observability import get_langfuse
+from app.observability import get_langfuse, metrics_router
 
 log = get_logger(__name__)
 
@@ -67,6 +67,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Prometheus scrape endpoint.
+app.include_router(metrics_router)
 
 
 def get_fhir() -> FhirClient:
