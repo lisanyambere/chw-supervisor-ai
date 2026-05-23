@@ -29,10 +29,10 @@ make up
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 0 — Infrastructure | **Done** | Docker stack up: OpenMRS 3, Postgres, Redis, Langfuse, Prometheus, Grafana |
-| 1 — Synthetic data | Not started | Synthea + Kenyan localization + CHW overlay + FHIR load |
-| 2 — Backend agents | Not started | LangGraph pipeline, FastAPI, Langfuse instrumentation |
-| 3 — Evaluator | Not started | Groundedness + sufficiency + LLM-judge layers |
-| 4 — Supervisor frontend | Not started | Next.js + shadcn dashboard |
+| 1 — Synthetic data | **Done** | Synthea + Kenyan localization + CHW overlay + FHIR bulk load (deceased backfill included) |
+| 2 — Backend agents | **Done** | FastAPI + LangGraph briefing agent, FHIR client, tool registry, Langfuse traces |
+| 3 — Evaluator | **Done** | Rule-based scorers, LLM-as-judge (action + citations), golden-question runner |
+| 4 — Supervisor frontend | **In progress** | Next.js 15 + Tailwind shell, typed `/briefing` client, plan timeline, structured answer renderer |
 | 5 — Admin / observability | Not started | Trace viewer, Grafana dashboards |
 | 6 — Polish + deployment | Not started | README, video, VM deploy |
 
