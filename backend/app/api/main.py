@@ -1,12 +1,14 @@
 """FastAPI app entrypoint."""
 from __future__ import annotations
 
+import time
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import Response
 
 from app.agents import format_answer, run_briefing
 from app.api.schemas import (
@@ -22,6 +24,7 @@ from app.fhir import FhirClient, get_id_map
 from app.llm import get_llm
 from app.observability import aflush as langfuse_flush
 from app.observability import get_langfuse, metrics_router
+from app.observability.metrics import REQUEST_LATENCY
 
 log = get_logger(__name__)
 
@@ -70,6 +73,32 @@ app.add_middleware(
 
 # Prometheus scrape endpoint.
 app.include_router(metrics_router)
+
+
+@app.middleware("http")
+async def record_request_latency(
+    request: Request, call_next: object
+) -> Response:
+    # Don't record the scrape endpoint itself — would create a self-reference
+    # loop in the time series every time Prometheus polls.
+    if request.url.path == "/metrics":
+        return await call_next(request)  # type: ignore[operator]
+
+    start = time.perf_counter()
+    response: Response = await call_next(request)  # type: ignore[operator]
+    elapsed = time.perf_counter() - start
+
+    # Use the matched route's path template, not the raw URL. Unmatched
+    # paths (404s) bucket under a single label to keep cardinality bounded.
+    route = request.scope.get("route")
+    template = route.path if route is not None and hasattr(route, "path") else "unmatched"
+
+    REQUEST_LATENCY.labels(
+        method=request.method,
+        path=template,
+        status=str(response.status_code),
+    ).observe(elapsed)
+    return response
 
 
 def get_fhir() -> FhirClient:

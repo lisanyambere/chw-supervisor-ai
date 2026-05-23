@@ -1,17 +1,26 @@
-"""Prometheus /metrics endpoint.
+"""Prometheus /metrics endpoint and service-level metrics.
 
 prometheus_client auto-registers process, GC, and platform collectors on
 import, so the default registry already carries useful baseline metrics
-(memory, CPU, fd count, GC pauses). Service-specific metrics
-(request latency, tool calls, LLM calls) land in follow-up commits and
-register against this same module-level registry.
+(memory, CPU, fd count, GC pauses). Service-level metrics defined here
+register against the same default registry; the middleware in
+`app.api.main` populates them.
 """
 from __future__ import annotations
 
 from fastapi import APIRouter, Response
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Histogram, generate_latest
 
 metrics_router = APIRouter()
+
+# Request latency, labelled by method + matched path template + status.
+# Path TEMPLATE (e.g. "/briefing"), never the raw URL — avoids cardinality
+# blow-up from path params or query strings.
+REQUEST_LATENCY = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request latency by method, path template, and status",
+    labelnames=("method", "path", "status"),
+)
 
 
 @metrics_router.get("/metrics", include_in_schema=False)

@@ -25,3 +25,28 @@ def test_metrics_endpoint_is_hidden_from_openapi() -> None:
     with TestClient(app) as client:
         schema = client.get("/openapi.json").json()
     assert "/metrics" not in schema["paths"]
+
+
+def test_request_latency_records_observation() -> None:
+    with TestClient(app) as client:
+        # 404 is fast and avoids touching FHIR / LLM at all.
+        client.get("/this-path-does-not-exist")
+        body = client.get("/metrics").text
+
+    assert "http_request_duration_seconds_count" in body
+    # Unmatched paths bucket under a single label, not the raw URL.
+    assert 'path="unmatched"' in body
+    assert 'method="GET"' in body
+    assert 'status="404"' in body
+
+
+def test_metrics_path_is_excluded_from_histogram() -> None:
+    with TestClient(app) as client:
+        # Hit /metrics a few times to confirm the middleware skips it.
+        client.get("/metrics")
+        client.get("/metrics")
+        body = client.get("/metrics").text
+
+    # The /metrics path itself must never appear as a histogram label —
+    # otherwise every scrape would inflate the time series.
+    assert 'path="/metrics"' not in body
