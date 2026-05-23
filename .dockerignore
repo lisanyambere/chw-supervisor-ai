@@ -1,0 +1,47 @@
+# Silver needs full git history at runtime for `git reset --hard <base_commit>`.
+# Do NOT add `.git/` to this file.
+
+# Python build/cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+dist/
+build/
+
+# Node — frontend artifacts (frontend is not built in this image)
+node_modules/
+.next/
+.pnpm-store/
+
+# Generated synthetic data — huge, not needed for backend tests
+data/synthea/output/
+data/synthea/*.jar
+data/fixtures/*
+!data/fixtures/.gitkeep
+
+# Docker / Compose state
+.docker-volumes/
+
+# Local env files — never bake into image
+.env
+.env.local
+.env.*.local
+
+# IDE / OS noise
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs / scratch
+*.log
+load.out
+load.err
+tmp_*.txt
+tmp_*.json
