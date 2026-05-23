@@ -12,8 +12,14 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-from openai import AsyncOpenAI
+from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from app.core import get_logger, get_settings
 
@@ -22,6 +28,18 @@ log = get_logger(__name__)
 # Sentinel so callers can pass `temperature=None` to mean "omit", while a
 # missing argument means "use the provider default".
 _UNSET: Any = object()
+
+
+# Retry transport-level failures and 5xx server errors. 4xx (including 429)
+# is intentionally not retried here; 429 with a Retry-After header is a known
+# follow-up.
+def _should_retry_llm(exc: BaseException) -> bool:
+    if isinstance(exc, (APIConnectionError, APITimeoutError)):
+        return True
+    if isinstance(exc, APIStatusError):
+        status = getattr(exc, "status_code", None)
+        return status is not None and status >= 500
+    return False
 
 
 @dataclass
@@ -34,6 +52,10 @@ class LLM:
     # GPT-5 family on Azure rejects any non-default temperature.
     # Set to None to omit the field entirely from the request.
     default_temperature: float | None = 0.2
+    # Retry knobs — tests construct an LLM directly with tighter values.
+    max_attempts: int = 3
+    retry_base_delay: float = 0.5
+    retry_max_delay: float = 4.0
 
     async def chat(
         self,
@@ -61,7 +83,21 @@ class LLM:
         if max_tokens is not None:
             params["max_tokens"] = max_tokens
         params.update(kwargs)
-        return await self.client.chat.completions.create(**params)
+
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(self.max_attempts),
+            wait=wait_exponential(
+                multiplier=self.retry_base_delay,
+                min=self.retry_base_delay,
+                max=self.retry_max_delay,
+            ),
+            retry=retry_if_exception(_should_retry_llm),
+            reraise=True,
+        ):
+            with attempt:
+                return await self.client.chat.completions.create(**params)
+        # Unreachable — reraise=True surfaces the underlying exception.
+        raise RuntimeError("llm retry exhausted")
 
 
 def _build_openrouter() -> LLM:
@@ -77,7 +113,14 @@ def _build_openrouter() -> LLM:
             "X-Title": "Community Health AI Assistant",
         },
     )
-    return LLM(client=client, model=s.openrouter_model, provider="openrouter")
+    return LLM(
+        client=client,
+        model=s.openrouter_model,
+        provider="openrouter",
+        max_attempts=s.llm_max_attempts,
+        retry_base_delay=s.llm_retry_base_delay,
+        retry_max_delay=s.llm_retry_max_delay,
+    )
 
 
 def _build_azure() -> LLM:
@@ -110,6 +153,9 @@ def _build_azure() -> LLM:
         provider="azure",
         # GPT-5 family only accepts default temperature → omit it.
         default_temperature=None,
+        max_attempts=s.llm_max_attempts,
+        retry_base_delay=s.llm_retry_base_delay,
+        retry_max_delay=s.llm_retry_max_delay,
     )
 
 

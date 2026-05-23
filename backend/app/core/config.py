@@ -86,6 +86,19 @@ class Settings(BaseSettings):
         default=30, alias="BRIEFING_DEFAULT_LOOKBACK_DAYS", ge=1, le=365
     )
 
+    # ── LLM retry (mirrors the FHIR client pattern) ──────────────────────
+    # Transport errors and 5xx responses are retried with exponential backoff.
+    # 4xx (including 429 — see follow-up task) are surfaced immediately.
+    llm_max_attempts: int = Field(
+        default=3, alias="LLM_MAX_ATTEMPTS", ge=1, le=10
+    )
+    llm_retry_base_delay: float = Field(
+        default=0.5, alias="LLM_RETRY_BASE_DELAY", gt=0.0, le=10.0
+    )
+    llm_retry_max_delay: float = Field(
+        default=4.0, alias="LLM_RETRY_MAX_DELAY", gt=0.0, le=60.0
+    )
+
     @property
     def repo_root(self) -> Path:
         return _REPO_ROOT

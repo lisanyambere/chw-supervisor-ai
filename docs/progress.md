@@ -314,6 +314,13 @@ to the Langfuse trace it came from.
 - **Persistence** — drop the conversation reducer into a small KV store
   (Postgres or just localStorage to start) so reloads don't wipe history.
 
+### Known gaps to address
+
+- **LLM retry on 429 (Retry-After)** — current retry covers transport errors
+  and 5xx only. Rate-limit responses fall through immediately. Honouring
+  `Retry-After` (and avoiding retry storms across concurrent briefings) is
+  the next resilience step.
+
 ### Phase 5+ roadmap
 
 - **More tools** — overdue ANC visits, immunization gaps, defaulters, time
