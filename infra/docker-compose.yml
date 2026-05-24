@@ -19,7 +19,12 @@ services:
     volumes:
       - openmrs-data:/openmrs/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/openmrs/health || exit 1"]
+      # /openmrs/health does not exist on this image — Tomcat returns 404
+      # for it, which left the container permanently reporting unhealthy
+      # even when FHIR was serving. /openmrs/ returns 200 as soon as the
+      # webapp is deployed. Application-level FHIR readiness is checked
+      # separately on the backend's /readyz.
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/openmrs/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 15
