@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import time
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -93,7 +93,9 @@ async def record_request_latency(
     # Use the matched route's path template, not the raw URL. Unmatched
     # paths (404s) bucket under a single label to keep cardinality bounded.
     route = request.scope.get("route")
-    template = route.path if route is not None and hasattr(route, "path") else "unmatched"
+    template = (
+        route.path if route is not None and hasattr(route, "path") else "unmatched"
+    )
 
     REQUEST_LATENCY.labels(
         method=request.method,

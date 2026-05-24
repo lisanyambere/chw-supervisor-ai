@@ -8,7 +8,6 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 # Repository root = parents[3] (core -> app -> backend -> repo)
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 

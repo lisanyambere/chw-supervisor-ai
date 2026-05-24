@@ -10,11 +10,10 @@ import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
-from openai import AsyncOpenAI, BadRequestError
+from openai import APIStatusError, AsyncOpenAI, BadRequestError
 
 from app.api.main import app
 from app.llm.client import LLM
-
 
 BASE = "http://fake-llm/v1"
 CHAT_URL = f"{BASE}/chat/completions"
@@ -94,7 +93,7 @@ async def test_max_retries_zero_means_one_attempt() -> None:
         return_value=httpx.Response(503, text="busy")
     )
 
-    with pytest.raises(Exception):  # APIStatusError / InternalServerError
+    with pytest.raises(APIStatusError):
         await _llm(max_retries=0).chat([{"role": "user", "content": "hi"}])
 
     assert route.call_count == 1

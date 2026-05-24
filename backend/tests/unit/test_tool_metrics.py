@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 from app.api.main import app
 from app.tools.registry import execute, tool
 
-
 # Tools register themselves at import time. Two probes — one that
 # succeeds, one that raises — so we can assert both outcome labels.
 
