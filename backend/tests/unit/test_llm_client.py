@@ -18,7 +18,8 @@ CHAT_URL = f"{BASE}/chat/completions"
 
 
 def _llm(max_attempts: int = 3) -> LLM:
-    client = AsyncOpenAI(api_key="test", base_url=BASE)
+    # max_retries=0 matches the production builders — tenacity owns retries.
+    client = AsyncOpenAI(api_key="test", base_url=BASE, max_retries=0)
     return LLM(
         client=client,
         model="test-model",

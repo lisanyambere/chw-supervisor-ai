@@ -107,6 +107,11 @@ def _build_openrouter() -> LLM:
     client = AsyncOpenAI(
         api_key=s.openrouter_api_key,
         base_url=s.openrouter_base_url,
+        # Tenacity owns the retry policy. The openai SDK defaults to
+        # max_retries=2, which silently retries transient 5xx responses
+        # BEFORE our tenacity wrapper observes them — making the wrapper
+        # effectively dead code under typical failure modes.
+        max_retries=0,
         # OpenRouter recommends these headers for attribution / rate-limit tier.
         default_headers={
             "HTTP-Referer": "https://github.com/lisanyambere/chw-supervisor-ai",
@@ -145,7 +150,11 @@ def _build_azure() -> LLM:
         raise RuntimeError(f"Azure OpenAI env vars missing: {', '.join(missing)}")
 
     base_url = _normalize_azure_endpoint(s.azure_openai_endpoint)
-    client = AsyncOpenAI(api_key=s.azure_openai_api_key, base_url=base_url)
+    # See note in _build_openrouter — tenacity owns retries; disable
+    # the openai SDK's internal retry layer to avoid double-retry.
+    client = AsyncOpenAI(
+        api_key=s.azure_openai_api_key, base_url=base_url, max_retries=0
+    )
     return LLM(
         client=client,
         # On Azure, `model` is the deployment name.
