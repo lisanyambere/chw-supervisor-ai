@@ -314,7 +314,30 @@ to the Langfuse trace it came from.
 - **Persistence** — drop the conversation reducer into a small KV store
   (Postgres or just localStorage to start) so reloads don't wipe history.
 
-### Phase 5+ roadmap
+## Phase 5 — Observability (done)
+
+Prometheus + Grafana wired against the FastAPI backend.
+
+**What landed:**
+- `/metrics` endpoint exposing the default registry plus three service
+  metrics: `http_request_duration_seconds` (labelled by method / path
+  template / status), `tool_call_duration_seconds` (by tool / outcome),
+  `llm_call_duration_seconds` (by provider / outcome).
+- Request-latency middleware that bypasses `/metrics` itself and buckets
+  unmatched paths under a single label.
+- `prometheus.yml` scrapes the backend via `host.docker.internal:8000`
+  (host-running backend; switches to `backend:8000` when it moves into
+  compose).
+- Provisioned Grafana datasource (uid `prometheus`) and dashboard
+  `cha-ai-backend` with five panels: backend up, HTTP request rate by
+  status, HTTP p95 by path, tool call rate, LLM call rate.
+- Split `/healthz` (dependency-free liveness) from `/readyz`
+  (probes OpenMRS + LLM, returns 503 when any required dep is down).
+- Refactored LLM client to drop the redundant tenacity wrapper —
+  `c75a356` revealed it was double-retrying with the openai SDK, and
+  `4e8d769` collapsed everything onto SDK-native retries.
+
+### Phase 6+ roadmap
 
 - **More tools** — overdue ANC visits, immunization gaps, defaulters, time
   since last home visit, visits per day.

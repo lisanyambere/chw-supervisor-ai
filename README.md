@@ -33,7 +33,7 @@ make up
 | 2 — Backend agents | **Done** | FastAPI + LangGraph briefing agent, FHIR client, tool registry, Langfuse traces |
 | 3 — Evaluator | **Done** | Rule-based scorers, LLM-as-judge (action + citations), golden-question runner |
 | 4 — Supervisor frontend | **In progress** | Next.js 15 + Tailwind shell, typed `/briefing` client, plan timeline, structured answer renderer |
-| 5 — Admin / observability | Not started | Trace viewer, Grafana dashboards |
+| 5 — Observability | **Done** | Prometheus `/metrics`, request + tool + LLM histograms, Grafana dashboard, `/healthz` + `/readyz` |
 | 6 — Polish + deployment | Not started | README, video, VM deploy |
 
 ---
