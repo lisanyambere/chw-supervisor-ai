@@ -9,11 +9,13 @@ and exposes a `_schema` attribute used to build the OpenAI tool spec.
 from __future__ import annotations
 
 import inspect
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
 from app.fhir import FhirClient
+from app.observability.metrics import TOOL_CALL_DURATION
 
 ToolFn = Callable[..., Awaitable[Any]]
 
@@ -71,8 +73,17 @@ def get_tool(name: str) -> Tool | None:
 async def execute(name: str, args: dict[str, Any], client: FhirClient) -> Any:
     t = _REGISTRY.get(name)
     if t is None:
+        # Not timed — no tool function actually ran.
         return {"error": f"unknown tool: {name}"}
+    start = time.perf_counter()
     try:
-        return await t.fn(client, **args)
+        result = await t.fn(client, **args)
     except Exception as e:  # noqa: BLE001 — tool errors must not crash the agent
+        TOOL_CALL_DURATION.labels(tool=name, outcome="error").observe(
+            time.perf_counter() - start
+        )
         return {"error": f"{type(e).__name__}: {e}"}
+    TOOL_CALL_DURATION.labels(tool=name, outcome="ok").observe(
+        time.perf_counter() - start
+    )
+    return result

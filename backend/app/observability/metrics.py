@@ -22,6 +22,14 @@ REQUEST_LATENCY = Histogram(
     labelnames=("method", "path", "status"),
 )
 
+# Tool call latency, labelled by registered tool name and outcome.
+# Cardinality is bounded by the size of the tool registry (~10) × 2 outcomes.
+TOOL_CALL_DURATION = Histogram(
+    "tool_call_duration_seconds",
+    "Agent tool call latency by tool name and outcome",
+    labelnames=("tool", "outcome"),
+)
+
 
 @metrics_router.get("/metrics", include_in_schema=False)
 async def metrics() -> Response:
