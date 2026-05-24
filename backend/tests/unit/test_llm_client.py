@@ -9,8 +9,10 @@ from __future__ import annotations
 import httpx
 import pytest
 import respx
+from fastapi.testclient import TestClient
 from openai import AsyncOpenAI, BadRequestError
 
+from app.api.main import app
 from app.llm.client import LLM
 
 
@@ -96,3 +98,39 @@ async def test_max_retries_zero_means_one_attempt() -> None:
         await _llm(max_retries=0).chat([{"role": "user", "content": "hi"}])
 
     assert route.call_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_ok_outcome_recorded_in_metrics() -> None:
+    respx.post(CHAT_URL).mock(
+        return_value=httpx.Response(200, json=_completion_body("hi"))
+    )
+
+    await _llm(max_retries=0).chat([{"role": "user", "content": "hi"}])
+
+    with TestClient(app) as http:
+        body = http.get("/metrics").text
+
+    assert "llm_call_duration_seconds_count" in body
+    assert 'provider="openrouter"' in body
+    assert 'outcome="ok"' in body
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_error_outcome_recorded_in_metrics() -> None:
+    respx.post(CHAT_URL).mock(
+        return_value=httpx.Response(
+            400, json={"error": {"message": "bad request"}}
+        )
+    )
+
+    with pytest.raises(BadRequestError):
+        await _llm(max_retries=0).chat([{"role": "user", "content": "hi"}])
+
+    with TestClient(app) as http:
+        body = http.get("/metrics").text
+
+    assert 'llm_call_duration_seconds_count{outcome="error"' in body
+    assert 'provider="openrouter"' in body

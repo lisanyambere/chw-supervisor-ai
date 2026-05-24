@@ -30,6 +30,14 @@ TOOL_CALL_DURATION = Histogram(
     labelnames=("tool", "outcome"),
 )
 
+# End-to-end LLM call latency, labelled by provider (openrouter / azure)
+# and outcome (ok / error). Includes any SDK-internal retries.
+LLM_CALL_DURATION = Histogram(
+    "llm_call_duration_seconds",
+    "LLM chat call latency by provider and outcome",
+    labelnames=("provider", "outcome"),
+)
+
 
 @metrics_router.get("/metrics", include_in_schema=False)
 async def metrics() -> Response:

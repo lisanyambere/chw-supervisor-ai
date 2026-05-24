@@ -12,6 +12,7 @@ on 429. We just configure `max_retries` from settings.
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
@@ -20,6 +21,7 @@ from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 
 from app.core import get_logger, get_settings
+from app.observability.metrics import LLM_CALL_DURATION
 
 log = get_logger(__name__)
 
@@ -65,7 +67,17 @@ class LLM:
         if max_tokens is not None:
             params["max_tokens"] = max_tokens
         params.update(kwargs)
-        return await self.client.chat.completions.create(**params)
+
+        start = time.perf_counter()
+        outcome = "error"
+        try:
+            completion = await self.client.chat.completions.create(**params)
+            outcome = "ok"
+            return completion
+        finally:
+            LLM_CALL_DURATION.labels(
+                provider=self.provider, outcome=outcome
+            ).observe(time.perf_counter() - start)
 
 
 def _sdk_retries(max_attempts: int) -> int:
