@@ -7,8 +7,10 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # FastAPI backend — uncomment when backend is running (phase 2+)
-  # - job_name: community-health-backend
-  #   static_configs:
-  #     - targets: ["backend:8000"]
-  #   metrics_path: /metrics
+  # FastAPI backend. While the backend runs on the host (dev workflow),
+  # Prometheus reaches it via Docker Desktop's host alias. When the backend
+  # moves into compose, change the target to "backend:8000".
+  - job_name: community-health-backend
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+    metrics_path: /metrics
