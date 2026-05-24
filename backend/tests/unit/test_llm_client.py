@@ -1,7 +1,8 @@
 """Unit tests for the LLM client (mocked with respx).
 
-Mirrors the structure of test_fhir_client.py: a real `LLM` is constructed
-against a fake base URL and HTTP responses are stubbed at the httpx layer.
+The openai SDK owns retry policy; these tests just verify that our
+configuration flows through correctly — happy path, 4xx surfacing
+immediately, and SDK exponential-backoff retries firing on 5xx.
 """
 from __future__ import annotations
 
@@ -17,18 +18,9 @@ BASE = "http://fake-llm/v1"
 CHAT_URL = f"{BASE}/chat/completions"
 
 
-def _llm(max_attempts: int = 3) -> LLM:
-    # max_retries=0 matches the production builders — tenacity owns retries.
-    client = AsyncOpenAI(api_key="test", base_url=BASE, max_retries=0)
-    return LLM(
-        client=client,
-        model="test-model",
-        provider="openrouter",
-        max_attempts=max_attempts,
-        # Keep test runtime small.
-        retry_base_delay=0.01,
-        retry_max_delay=0.05,
-    )
+def _llm(max_retries: int = 2) -> LLM:
+    client = AsyncOpenAI(api_key="test", base_url=BASE, max_retries=max_retries)
+    return LLM(client=client, model="test-model", provider="openrouter")
 
 
 def _completion_body(content: str = "ok") -> dict:
@@ -62,7 +54,7 @@ async def test_chat_returns_completion_on_success() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_5xx_retries_then_succeeds() -> None:
+async def test_sdk_retries_5xx_then_succeeds() -> None:
     route = respx.post(CHAT_URL).mock(
         side_effect=[
             httpx.Response(503, text="busy"),
@@ -70,7 +62,7 @@ async def test_5xx_retries_then_succeeds() -> None:
         ]
     )
 
-    completion = await _llm(max_attempts=3).chat(
+    completion = await _llm(max_retries=2).chat(
         [{"role": "user", "content": "hi"}]
     )
 
@@ -88,6 +80,19 @@ async def test_4xx_raises_without_retry() -> None:
     )
 
     with pytest.raises(BadRequestError):
-        await _llm(max_attempts=3).chat([{"role": "user", "content": "hi"}])
+        await _llm(max_retries=2).chat([{"role": "user", "content": "hi"}])
 
     assert route.call_count == 1  # 4xx must not retry
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_max_retries_zero_means_one_attempt() -> None:
+    route = respx.post(CHAT_URL).mock(
+        return_value=httpx.Response(503, text="busy")
+    )
+
+    with pytest.raises(Exception):  # APIStatusError / InternalServerError
+        await _llm(max_retries=0).chat([{"role": "user", "content": "hi"}])
+
+    assert route.call_count == 1
