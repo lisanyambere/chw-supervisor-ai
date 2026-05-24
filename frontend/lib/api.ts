@@ -6,7 +6,7 @@
  */
 
 export const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8001";
+  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
 // ─── /briefing ──────────────────────────────────────────────────────────────
 
@@ -79,10 +79,26 @@ export async function postBriefing(
   return (await res.json()) as BriefingResponse;
 }
 
-// ─── /healthz ───────────────────────────────────────────────────────────────
+// ─── /healthz (liveness) ────────────────────────────────────────────────────
 
-export type HealthResponse = {
-  status: "ok" | "degraded";
+export type LivenessResponse = {
+  status: "ok";
+};
+
+export async function getHealth(): Promise<LivenessResponse> {
+  const res = await fetch(`${BACKEND_URL}/healthz`);
+  if (!res.ok) throw new Error(`healthz failed: ${res.status}`);
+  return (await res.json()) as LivenessResponse;
+}
+
+// ─── /readyz (downstream checks) ────────────────────────────────────────────
+//
+// Returns 200 when every required downstream is reachable, 503 otherwise.
+// Both carry the same body shape so the caller can render a "Backend
+// unavailable — OpenMRS unreachable" style message without retrying.
+
+export type ReadinessResponse = {
+  status: "ready" | "not_ready";
   openmrs: boolean;
   llm_provider: string;
   llm_model: string;
@@ -90,8 +106,10 @@ export type HealthResponse = {
   chws_loaded: number;
 };
 
-export async function getHealth(): Promise<HealthResponse> {
-  const res = await fetch(`${BACKEND_URL}/healthz`);
-  if (!res.ok) throw new Error(`healthz failed: ${res.status}`);
-  return (await res.json()) as HealthResponse;
+export async function getReady(): Promise<ReadinessResponse> {
+  const res = await fetch(`${BACKEND_URL}/readyz`);
+  if (res.status !== 200 && res.status !== 503) {
+    throw new Error(`readyz failed: ${res.status}`);
+  }
+  return (await res.json()) as ReadinessResponse;
 }

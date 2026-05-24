@@ -44,14 +44,6 @@ plus the cross-cutting things that don't slot neatly into a phase.
 
 ## Known bugs / gaps (real, observed)
 
-- [ ] **`BACKEND_URL` default is `http://localhost:8001` in `frontend/lib/api.ts`**
-  — backend actually serves on `8000`. Frontend will fail out of the box
-  unless `NEXT_PUBLIC_BACKEND_URL` is set. Likely a leftover from an
-  earlier port plan.
-- [ ] **`HealthResponse` type in `frontend/lib/api.ts` is stale** — backend
-  split `/healthz` (liveness, returns `{status:"ok"}` only) from `/readyz`
-  (the rich shape). The frontend type still expects the rich shape. Also,
-  `getHealth()` is currently dead code (no caller).
 - [ ] **Encounter idempotency** in `data/load_to_openmrs.py` — patients and
   practitioners are checked by identifier before POST, encounters are not.
   Re-running the loader doubles the encounter rows. Fix: search by
@@ -93,6 +85,11 @@ plus the cross-cutting things that don't slot neatly into a phase.
 
 ## Recently shipped (for context — last 24h)
 
+- [x] `fix(frontend)`: `BACKEND_URL` default 8001→8000; split `HealthResponse`
+  into `LivenessResponse` + `ReadinessResponse` matching the backend, plus
+  a `getReady()` function that doesn't throw on 503.
+- [x] `feat(frontend)`: vitest + @testing-library scaffold, 9 tests covering
+  postBriefing / getHealth / getReady.
 - [x] Phase 5 observability — `/metrics`, request/tool/LLM histograms,
   Grafana dashboard, Prometheus scrape target.
 - [x] `/healthz` (liveness) vs `/readyz` (downstream checks) split.
