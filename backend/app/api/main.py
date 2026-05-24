@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.responses import Response
 
 from app.agents import format_answer, run_briefing
@@ -15,8 +16,9 @@ from app.api.schemas import (
     AnswerDocOut,
     BriefingRequest,
     BriefingResponse,
-    HealthResponse,
+    LivenessResponse,
     PlanStepOut,
+    ReadinessResponse,
     TraceEntry,
 )
 from app.core import configure_logging, get_logger, get_settings
@@ -105,8 +107,19 @@ def get_fhir() -> FhirClient:
     return app.state.fhir
 
 
-@app.get("/healthz", response_model=HealthResponse)
-async def healthz(fhir: FhirClient = Depends(get_fhir)) -> HealthResponse:
+@app.get("/healthz", response_model=LivenessResponse)
+async def healthz() -> LivenessResponse:
+    # Liveness probe: just confirms the process is up and able to respond.
+    # No downstream calls — those belong on /readyz.
+    return LivenessResponse(status="ok")
+
+
+@app.get(
+    "/readyz",
+    response_model=ReadinessResponse,
+    responses={503: {"model": ReadinessResponse}},
+)
+async def readyz(fhir: FhirClient = Depends(get_fhir)) -> Response:
     s = get_settings()
     idmap = get_id_map()
 
@@ -114,22 +127,29 @@ async def healthz(fhir: FhirClient = Depends(get_fhir)) -> HealthResponse:
     try:
         await fhir.count("Patient", params={"_count": "0"})
     except Exception as e:  # noqa: BLE001
-        log.warning("healthz.openmrs_unreachable", error=str(e))
+        log.warning("readyz.openmrs_unreachable", error=str(e))
         openmrs_ok = False
 
+    llm_ok = True
     try:
         llm = get_llm()
         provider, model = llm.provider, llm.model
     except RuntimeError:
+        llm_ok = False
         provider, model = s.llm_provider, "(unconfigured)"
 
-    return HealthResponse(
-        status="ok" if openmrs_ok else "degraded",
+    ready = openmrs_ok and llm_ok
+    body = ReadinessResponse(
+        status="ready" if ready else "not_ready",
         openmrs=openmrs_ok,
         llm_provider=provider,
         llm_model=model,
         patients_loaded=len(idmap.patients),
         chws_loaded=len(idmap.practitioners),
+    )
+    return JSONResponse(
+        content=body.model_dump(),
+        status_code=200 if ready else 503,
     )
 
 

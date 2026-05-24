@@ -6,8 +6,16 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
-class HealthResponse(BaseModel):
-    status: str
+class LivenessResponse(BaseModel):
+    """Process is alive. No downstream probing — use /readyz for that."""
+
+    status: str  # always "ok"
+
+
+class ReadinessResponse(BaseModel):
+    """Downstream checks. 503 when any required dep is unreachable."""
+
+    status: str  # "ready" or "not_ready"
     openmrs: bool
     llm_provider: str
     llm_model: str
