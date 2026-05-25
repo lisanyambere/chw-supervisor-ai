@@ -5,14 +5,14 @@ Single-agent ReAct-style loop:
     2. if LLM emits tool calls, execute them in parallel and loop
     3. otherwise return the final assistant message
 
-LangGraph can replace this when multi-agent reasoning lands in Phase 3.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import time
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from openai.types.chat import ChatCompletionMessageParam
@@ -62,6 +62,40 @@ class TraceEvent:
 
 
 @dataclass
+class StreamEvent:
+    """One frame on the /briefing/stream wire.
+
+    `kind` is one of:
+      - "tool_start"  — agent decided to call a tool; `tool` + `args` set
+      - "tool_done"   — tool returned; `tool` + `args` + `ms` + `rows` set
+      - "response"    — final answer ready; `answer` + `iterations` +
+                        `tool_calls` + `plan` set
+      - "error"       — fatal failure during the run; `message` set
+    """
+
+    kind: str
+    # tool_start / tool_done
+    tool: str | None = None
+    args: str | None = None
+    ms: int | None = None
+    rows: int | None = None
+    # response
+    answer: str | None = None
+    iterations: int | None = None
+    tool_calls: int | None = None
+    plan: list[dict[str, Any]] | None = None
+    # error
+    message: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to a wire-friendly dict with None fields stripped."""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+OnEvent = Callable[["StreamEvent"], Awaitable[None]]
+
+
+@dataclass
 class PlanStep:
     """One row of the live tool-execution timeline.
 
@@ -96,6 +130,7 @@ async def run_briefing(
     llm: LLM | None = None,
     max_iterations: int = MAX_TOOL_ITERATIONS,
     lookback_days: int | None = None,
+    on_event: OnEvent | None = None,
 ) -> BriefingResult:
     """Answer a supervisor question by tool-calling the FHIR layer."""
     own_fhir = fhir is None
@@ -123,9 +158,20 @@ async def run_briefing(
                 max_iterations=max_iterations,
                 lookback_days=lookback_days,
                 lf=lf,
+                on_event=on_event,
             )
             # Always derive a plan, with or without Langfuse.
             result.plan = _derive_plan(result.trace)
+            if on_event is not None:
+                await on_event(
+                    StreamEvent(
+                        kind="response",
+                        answer=result.answer,
+                        iterations=result.iterations,
+                        tool_calls=result.tool_calls,
+                        plan=[asdict(p) for p in result.plan],
+                    )
+                )
             if agent_span is not None:
                 try:
                     # Capture trace id so the caller can attach evaluator scores.
@@ -248,6 +294,7 @@ async def _run_briefing_inner(
     max_iterations: int,
     lookback_days: int,
     lf: Any | None,
+    on_event: OnEvent | None = None,
 ) -> BriefingResult:
     tools = [t.to_openai() for t in all_tools()]
     messages: list[ChatCompletionMessageParam] = [
@@ -329,6 +376,22 @@ async def _run_briefing_inner(
         calls = msg.tool_calls
         log.info("agent.tools", count=len(calls))
 
+        if on_event is not None:
+            # Fire all tool_start frames before any tool_done — preserves
+            # the "agent decided to call all of these" semantics on the wire.
+            for call in calls:
+                try:
+                    pre_args = json.loads(call.function.arguments or "{}")
+                except json.JSONDecodeError:
+                    pre_args = {}
+                await on_event(
+                    StreamEvent(
+                        kind="tool_start",
+                        tool=call.function.name,
+                        args=_format_args(pre_args),
+                    )
+                )
+
         async def _run(call: Any) -> tuple[str, str, dict[str, Any], Any, int]:
             args = json.loads(call.function.arguments or "{}")
             t0 = time.perf_counter()
@@ -365,6 +428,16 @@ async def _run_briefing_inner(
                     "content": json.dumps(result, default=str),
                 }
             )
+            if on_event is not None:
+                await on_event(
+                    StreamEvent(
+                        kind="tool_done",
+                        tool=name,
+                        args=_format_args(args),
+                        ms=ms,
+                        rows=_row_count(result),
+                    )
+                )
 
     log.warning("agent.iteration_cap_hit")
     return BriefingResult(

@@ -1,17 +1,20 @@
 """FastAPI app entrypoint."""
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import json
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.responses import Response
 
-from app.agents import format_answer, run_briefing
+from app.agents import StreamEvent, format_answer, run_briefing
 from app.api.schemas import (
     AnswerDocOut,
     BriefingRequest,
@@ -198,4 +201,68 @@ async def briefing(
         plan=[PlanStepOut(**vars(s)) for s in result.plan],
         trace_id=result.trace_id,
         answer_doc=answer_doc,
+    )
+
+
+# Sentinel emitted by the run-agent task to signal stream completion to
+# the SSE generator. Not part of the public event schema.
+_STREAM_DONE = "__done__"
+
+
+@app.get("/briefing/stream")
+async def briefing_stream(
+    question: str = Query(..., min_length=1, max_length=2000),
+    max_iterations: int = Query(6, ge=1, le=12),
+    lookback_days: int | None = Query(None, ge=1, le=365),
+    fhir: FhirClient = Depends(get_fhir),
+) -> StreamingResponse:
+    """Server-Sent Events stream of the briefing agent's progress.
+
+    Emits events as tools start and finish, plus one final `response`
+    event with the full answer. EventSource-friendly (GET, no body).
+    """
+    queue: asyncio.Queue[dict | str] = asyncio.Queue()
+
+    async def on_event(event: StreamEvent) -> None:
+        await queue.put(event.to_dict())
+
+    async def run_agent() -> None:
+        try:
+            await run_briefing(
+                question=question,
+                fhir=fhir,
+                max_iterations=max_iterations,
+                lookback_days=lookback_days,
+                on_event=on_event,
+            )
+        except Exception as e:  # noqa: BLE001
+            await queue.put(
+                {"kind": "error", "message": f"{type(e).__name__}: {e}"}
+            )
+        finally:
+            await queue.put(_STREAM_DONE)
+
+    async def event_generator() -> AsyncIterator[str]:
+        task = asyncio.create_task(run_agent())
+        try:
+            while True:
+                evt = await queue.get()
+                if evt == _STREAM_DONE:
+                    break
+                assert isinstance(evt, dict)
+                yield f"event: {evt['kind']}\ndata: {json.dumps(evt)}\n\n"
+        finally:
+            if not task.done():
+                task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
     )
