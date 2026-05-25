@@ -224,16 +224,39 @@ async def briefing_stream(
     queue: asyncio.Queue[dict | str] = asyncio.Queue()
 
     async def on_event(event: StreamEvent) -> None:
+        # Suppress the inner `response` frame — we emit an enriched one
+        # below that also carries `trace_id` and a formatted `answer_doc`.
+        if event.kind == "response":
+            return
         await queue.put(event.to_dict())
 
     async def run_agent() -> None:
         try:
-            await run_briefing(
+            result = await run_briefing(
                 question=question,
                 fhir=fhir,
                 max_iterations=max_iterations,
                 lookback_days=lookback_days,
                 on_event=on_event,
+            )
+            answer_doc_dict: dict | None = None
+            try:
+                doc = await format_answer(result, question)
+                answer_doc_dict = doc.to_dict()
+            except Exception as e:  # noqa: BLE001
+                # Same best-effort posture as POST /briefing — keep streaming
+                # even if the second-pass formatter trips.
+                log.warning("formatter.failed", error=str(e))
+            await queue.put(
+                {
+                    "kind": "response",
+                    "answer": result.answer,
+                    "iterations": result.iterations,
+                    "tool_calls": result.tool_calls,
+                    "plan": [vars(p) for p in result.plan],
+                    "trace_id": result.trace_id,
+                    "answer_doc": answer_doc_dict,
+                }
             )
         except Exception as e:  # noqa: BLE001
             await queue.put(
