@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sidebar, type NavId } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
 import { Hero } from "@/components/Hero";
 import { Composer } from "@/components/Composer";
 import { AiTurn, UserTurn, type Turn } from "@/components/Conversation";
-import { postBriefing } from "@/lib/api";
+import { streamBriefing, type PlanStep } from "@/lib/api";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -24,19 +24,21 @@ export default function HomePage() {
   const [nav, setNav] = useState<NavId>("brief");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  // Active stream's close() — invoked on unmount so EventSource doesn't
+  // outlive the page. Also lets a future "stop" button cancel a run.
+  const closeStream = useRef<(() => void) | null>(null);
 
-  async function ask(q: string) {
+  useEffect(() => () => closeStream.current?.(), []);
+
+  function ask(q: string) {
     if (busy) return;
     setBusy(true);
     const userTurn: Turn = { id: uid(), role: "user", q, t: nowHHMM() };
     const aiId = uid();
-    // Placeholder AI turn with a single "thinking" row until the real plan
-    // lands. No fake choreography — when /briefing resolves we swap in the
-    // real plan with backend-measured ms timings, all marked done at once.
     const placeholder: Turn = {
       id: aiId,
       role: "ai",
-      plan: [{ tool: "agent", args: "(thinking…)", ms: 0, rows: 0 }],
+      plan: [],
       activeIdx: 0,
       doc: null,
       sources: [],
@@ -45,53 +47,117 @@ export default function HomePage() {
     };
     setTurns((prev) => [...prev, userTurn, placeholder]);
 
-    try {
-      const res = await postBriefing(q);
+    // Helper: mutate just the matching AI turn.
+    const patchAi = (
+      patch: (t: Extract<Turn, { role: "ai" }>) => Extract<Turn, { role: "ai" }>,
+    ) =>
       setTurns((prev) =>
-        prev.map((t) =>
-          t.id === aiId && t.role === "ai"
-            ? {
-                ...t,
-                plan: res.plan,
-                activeIdx: res.plan.length,
-                doc: res.answer_doc,
-                sources: res.answer_doc?.sources ?? [],
-                traceId: res.trace_id,
-                done: true,
-              }
-            : t,
-        ),
+        prev.map((t) => (t.id === aiId && t.role === "ai" ? patch(t) : t)),
       );
-    } catch (err) {
-      console.error(err);
-      setTurns((prev) =>
-        prev.map((t) =>
-          t.id === aiId && t.role === "ai"
-            ? {
-                ...t,
-                plan: [],
-                doc: {
-                  headline: "Couldn't reach the briefing service.",
-                  period: "",
-                  sections: [
-                    {
-                      kind: "callout",
-                      tone: "alert",
-                      title: "Request failed",
-                      body: String(err),
-                      evidence: [],
-                    },
-                  ],
-                  sources: [],
+
+    closeStream.current = streamBriefing(
+      q,
+      {
+        onFrame: (frame) => {
+          if (frame.kind === "tool_start") {
+            // Append a row in `running` state — the spinner is driven by
+            // i === activeIdx, so we push a placeholder PlanStep and bump
+            // activeIdx to it.
+            const step: PlanStep = {
+              tool: frame.tool,
+              args: frame.args,
+              ms: 0,
+              rows: 0,
+            };
+            patchAi((t) => ({
+              ...t,
+              plan: [...t.plan, step],
+              activeIdx: t.plan.length,
+            }));
+          } else if (frame.kind === "tool_done") {
+            // Replace the matching pending row with timed values. Match
+            // on (tool, args) FIFO — same semantics as backend _derive_plan.
+            patchAi((t) => {
+              const idx = t.plan.findIndex(
+                (s) =>
+                  s.tool === frame.tool &&
+                  s.args === frame.args &&
+                  s.ms === 0,
+              );
+              if (idx === -1) return t;
+              const next = t.plan.slice();
+              next[idx] = {
+                tool: frame.tool,
+                args: frame.args,
+                ms: frame.ms,
+                rows: frame.rows,
+              };
+              return { ...t, plan: next, activeIdx: idx + 1 };
+            });
+          } else if (frame.kind === "response") {
+            patchAi((t) => ({
+              ...t,
+              plan: frame.plan, // canonical ordering from backend
+              activeIdx: frame.plan.length,
+              doc: frame.answer_doc,
+              sources: frame.answer_doc?.sources ?? [],
+              traceId: frame.trace_id,
+              done: true,
+            }));
+          } else if (frame.kind === "error") {
+            patchAi((t) => ({
+              ...t,
+              plan: [],
+              doc: {
+                headline: "The briefing run failed.",
+                period: "",
+                sections: [
+                  {
+                    kind: "callout",
+                    tone: "alert",
+                    title: "Agent error",
+                    body: frame.message,
+                    evidence: [],
+                  },
+                ],
+                sources: [],
+              },
+              done: true,
+            }));
+          }
+        },
+        onTransportError: (e) => {
+          console.error("briefing stream transport error", e);
+          patchAi((t) =>
+            t.done
+              ? t
+              : {
+                  ...t,
+                  doc: {
+                    headline: "Couldn't reach the briefing service.",
+                    period: "",
+                    sections: [
+                      {
+                        kind: "callout",
+                        tone: "alert",
+                        title: "Connection lost",
+                        body: "The SSE stream dropped before the agent finished.",
+                        evidence: [],
+                      },
+                    ],
+                    sources: [],
+                  },
+                  done: true,
                 },
-                done: true,
-              }
-            : t,
-        ),
-      );
-    } finally {
-      setBusy(false);
-    }
+          );
+        },
+        onClose: () => {
+          closeStream.current = null;
+          setBusy(false);
+        },
+      },
+      { lookbackDays: 30 },
+    );
   }
 
   const isEmpty = turns.length === 0;

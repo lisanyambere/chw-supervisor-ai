@@ -113,3 +113,111 @@ export async function getReady(): Promise<ReadinessResponse> {
   }
   return (await res.json()) as ReadinessResponse;
 }
+
+// ─── /briefing/stream (SSE) ─────────────────────────────────────────────────
+//
+// Mirrors backend/app/agents/briefing.py:StreamEvent. The wire format is
+// SSE with named events: tool_start, tool_done, response, error. The
+// `response` frame carries the same shape as POST /briefing's body so
+// callers can render an AnswerDoc when the agent finishes.
+
+export type ToolStartFrame = {
+  kind: "tool_start";
+  tool: string;
+  args: string;
+};
+
+export type ToolDoneFrame = {
+  kind: "tool_done";
+  tool: string;
+  args: string;
+  ms: number;
+  rows: number;
+};
+
+export type ResponseFrame = {
+  kind: "response";
+  answer: string;
+  iterations: number;
+  tool_calls: number;
+  plan: PlanStep[];
+  trace_id: string | null;
+  answer_doc: AnswerDoc | null;
+};
+
+export type ErrorFrame = {
+  kind: "error";
+  message: string;
+};
+
+export type StreamFrame =
+  | ToolStartFrame
+  | ToolDoneFrame
+  | ResponseFrame
+  | ErrorFrame;
+
+export type StreamHandlers = {
+  onFrame: (frame: StreamFrame) => void;
+  /** Fired once when the stream cleanly terminates (response or error). */
+  onClose?: () => void;
+  /** Fired on transport-level failures (network drop, 5xx, CORS). */
+  onTransportError?: (event: Event) => void;
+};
+
+/**
+ * Open an EventSource against /briefing/stream and forward parsed frames.
+ *
+ * Returns a `close()` thunk the caller can invoke on unmount / cancel.
+ * EventSource itself is GET-only, no body, no custom headers — the SSE
+ * endpoint is shaped to match.
+ */
+export function streamBriefing(
+  question: string,
+  handlers: StreamHandlers,
+  opts: { lookbackDays?: number; maxIterations?: number } = {},
+): () => void {
+  const params = new URLSearchParams({ question });
+  if (opts.lookbackDays !== undefined) {
+    params.set("lookback_days", String(opts.lookbackDays));
+  }
+  if (opts.maxIterations !== undefined) {
+    params.set("max_iterations", String(opts.maxIterations));
+  }
+
+  const es = new EventSource(`${BACKEND_URL}/briefing/stream?${params}`);
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    es.close();
+    handlers.onClose?.();
+  };
+
+  const kinds: StreamFrame["kind"][] = [
+    "tool_start",
+    "tool_done",
+    "response",
+    "error",
+  ];
+  for (const kind of kinds) {
+    es.addEventListener(kind, (ev) => {
+      try {
+        const data = JSON.parse((ev as MessageEvent).data) as StreamFrame;
+        handlers.onFrame(data);
+        if (kind === "response" || kind === "error") close();
+      } catch (e) {
+        console.error("streamBriefing: frame parse failed", e);
+      }
+    });
+  }
+
+  es.onerror = (e) => {
+    // EventSource fires `error` on both transient reconnect attempts AND
+    // permanent failures. We treat any error after the stream is open as
+    // terminal — the backend doesn't reconnect mid-agent-run cleanly.
+    handlers.onTransportError?.(e);
+    close();
+  };
+
+  return close;
+}
