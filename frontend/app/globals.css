@@ -48,6 +48,7 @@ html, body {
   animation: pulseDot 1.6s ease-out infinite;
 }
 .pulse-dot--ok { background: var(--ok); box-shadow: 0 0 0 0 var(--ok); }
+.pulse-dot--alert { background: var(--alert); box-shadow: 0 0 0 0 var(--alert); }
 
 /* Spinner used in the plan timeline running state. */
 .spinner {

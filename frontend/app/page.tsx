@@ -6,7 +6,7 @@ import { Topbar } from "@/components/Topbar";
 import { Hero } from "@/components/Hero";
 import { Composer } from "@/components/Composer";
 import { AiTurn, UserTurn, type Turn } from "@/components/Conversation";
-import { streamBriefing, type PlanStep } from "@/lib/api";
+import { getReady, streamBriefing, type PlanStep } from "@/lib/api";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -24,6 +24,12 @@ export default function HomePage() {
   const [nav, setNav] = useState<NavId>("brief");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<
+    "checking" | "ready" | "down"
+  >("checking");
+  const [backendReason, setBackendReason] = useState<string>(
+    "Checking backend...",
+  );
   // Active stream's close() — invoked on unmount so EventSource doesn't
   // outlive the page. Also lets a future "stop" button cancel a run.
   const closeStream = useRef<(() => void) | null>(null);
@@ -33,6 +39,31 @@ export default function HomePage() {
   const pinnedRef = useRef(true);
 
   useEffect(() => () => closeStream.current?.(), []);
+
+  // Mount-time backend probe. Aborts on unmount so a slow probe doesn't
+  // setState after teardown.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    getReady({ signal: ctrl.signal })
+      .then((r) => {
+        if (r.status === "ready") {
+          setBackendStatus("ready");
+          return;
+        }
+        setBackendStatus("down");
+        setBackendReason(
+          r.openmrs
+            ? "Backend unavailable - downstream not ready."
+            : "Backend unavailable - OpenMRS unreachable.",
+        );
+      })
+      .catch((e: unknown) => {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        setBackendStatus("down");
+        setBackendReason("Backend unavailable - cannot reach service.");
+      });
+    return () => ctrl.abort();
+  }, []);
 
   // Re-pin whenever turns change and we were already at the bottom.
   useEffect(() => {
@@ -204,7 +235,14 @@ export default function HomePage() {
             </div>
           )}
         </div>
-        <Composer busy={busy} onSubmit={ask} />
+        <Composer
+          busy={busy}
+          onSubmit={ask}
+          disabled={backendStatus !== "ready"}
+          disabledReason={
+            backendStatus === "checking" ? "Checking backend..." : backendReason
+          }
+        />
       </div>
     </div>
   );

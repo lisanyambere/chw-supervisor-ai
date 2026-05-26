@@ -6,9 +6,13 @@ import { useEffect, useRef, useState } from "react";
 export function Composer({
   busy,
   onSubmit,
+  disabled = false,
+  disabledReason,
 }: {
   busy: boolean;
   onSubmit: (q: string) => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
   const [value, setValue] = useState("");
   const ref = useRef<HTMLTextAreaElement | null>(null);
@@ -23,7 +27,7 @@ export function Composer({
 
   function submit() {
     const q = value.trim();
-    if (!q || busy) return;
+    if (!q || busy || disabled) return;
     onSubmit(q);
     setValue("");
   }
@@ -43,12 +47,17 @@ export function Composer({
               }
             }}
             rows={1}
-            placeholder={`Ask about a CHW, patient, or trend.  Try "why is chw-002 quiet?"`}
+            disabled={disabled}
+            placeholder={
+              disabled
+                ? (disabledReason ?? "Backend unavailable.")
+                : `Ask about a CHW, patient, or trend.  Try "why is chw-002 quiet?"`
+            }
           />
           <button
             className="composer__send"
             onClick={submit}
-            disabled={busy || !value.trim()}
+            disabled={busy || disabled || !value.trim()}
             aria-label="Send"
           >
             <SendHorizontal size={14} />
@@ -59,7 +68,10 @@ export function Composer({
           <span>model: gpt-5.5 (azure)</span>
           <span>lookback: 30d</span>
           <span className="flex items-center gap-1.5">
-            <span className="pulse-dot pulse-dot--ok" /> fhir healthy
+            <span
+              className={`pulse-dot ${disabled ? "pulse-dot--alert" : "pulse-dot--ok"}`}
+            />
+            {disabled ? "backend down" : "fhir healthy"}
           </span>
           <span className="right text-[var(--ink-3)]">
             verify in OpenMRS before action
