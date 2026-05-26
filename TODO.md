@@ -3,6 +3,21 @@
 Living list of outstanding work. Organised by phase (matches README + progress.md)
 plus the cross-cutting things that don't slot neatly into a phase.
 
+## Next up — recommended order
+
+- **Highest demo value:** CHW detail drawer (Phase 4 #2). `chw-NNN` chips
+  already render but go nowhere — wire them to a right-side Sheet pulling
+  `count_chw_encounters` + `chw_patient_panel`. Makes the conversational
+  UI feel alive.
+- **Best for portfolio polish:** Activity charts view (Phase 4 #3). First
+  non-chat view, visually distinctive for a video/screenshot.
+- **Should-do-before-deploy:** Encounter idempotency bug in
+  `data/load_to_openmrs.py`. A re-run today silently doubles encounter
+  rows — bites any clean-data demo recording.
+- **Phase 6 kickoff:** Production Dockerfiles + `docker-compose.prod.yml`
+  so backend + frontend join the existing langfuse / prometheus / grafana
+  stack. Unlocks the VM deploy runbook.
+
 ## Phase 4 — Supervisor frontend (in progress)
 
 - [x] **SSE streaming** — `/briefing/stream` emits `tool_start` / `tool_done` /
@@ -18,10 +33,14 @@ plus the cross-cutting things that don't slot neatly into a phase.
 - [ ] **Frontend test infrastructure** — vitest + @testing-library/react. Zero
   tests today. At minimum cover `postBriefing` error path, Composer busy
   state, error fallback UI.
-- [ ] **Health check on mount** — call `getHealth()` once at app load, disable
-  Composer with "Backend unavailable" message if it fails.
-- [ ] **AbortController on requests** — the signal param exists in `postBriefing`
-  but is never wired to actual cancellation on unmount.
+- [x] **Health check on mount** — calls `getReady()` once at app load with
+  an AbortController, disables Composer with a reason-specific message
+  ("OpenMRS unreachable" vs "cannot reach service") if it fails. Status
+  pill flips to a red "backend down" pulse-dot.
+- [x] **AbortController on requests** — `getHealth` / `getReady` now accept
+  a `signal`, and the mount probe in `app/page.tsx` aborts on unmount.
+  `streamBriefing` already had `closeStream.current` wired to unmount.
+  `postBriefing` retains its existing `signal` param (no in-app caller yet).
 - [ ] **Mobile pass** — composer / sidebar / drawer responsive.
 
 ## Phase 6 — Polish + deployment (not started)
