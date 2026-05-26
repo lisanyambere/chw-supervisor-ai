@@ -27,8 +27,27 @@ export default function HomePage() {
   // Active stream's close() — invoked on unmount so EventSource doesn't
   // outlive the page. Also lets a future "stop" button cancel a run.
   const closeStream = useRef<(() => void) | null>(null);
+  // Scroll container + "user is pinned to bottom" flag. We only auto-scroll
+  // while pinned so a manual scroll-up to re-read isn't yanked back down.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pinnedRef = useRef(true);
 
   useEffect(() => () => closeStream.current?.(), []);
+
+  // Re-pin whenever turns change and we were already at the bottom.
+  useEffect(() => {
+    if (!pinnedRef.current) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [turns]);
+
+  function onScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    pinnedRef.current = distanceFromBottom < 64;
+  }
 
   function ask(q: string) {
     if (busy) return;
@@ -170,7 +189,7 @@ export default function HomePage() {
       <Sidebar active={nav} onSelect={setNav} />
       <div className="flex flex-col overflow-hidden">
         <Topbar breadcrumb={`workspace / ${navLabel(nav)}`} />
-        <div className="flex-1 overflow-y-auto">
+        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
           {isEmpty ? (
             <Hero onAsk={ask} />
           ) : (
