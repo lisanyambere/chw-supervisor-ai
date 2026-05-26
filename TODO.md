@@ -5,9 +5,9 @@ plus the cross-cutting things that don't slot neatly into a phase.
 
 ## Phase 4 — Supervisor frontend (in progress)
 
-- [ ] **SSE streaming** — replace the placeholder thinking row with `/briefing/stream`
-  emitting `tool_start` / `tool_done` / `response` events so the plan timeline
-  ticks live. Backend + frontend.
+- [x] **SSE streaming** — `/briefing/stream` emits `tool_start` / `tool_done` /
+  `response` events, frontend EventSource wired, plan timeline ticks live.
+  Trace id + answer_doc included in final frame. (commits ba4656c, d7c6432, 41a8624)
 - [ ] **Conversation persistence** — drop the reducer into localStorage (start)
   or Postgres so reloads don't wipe history.
 - [ ] **CHW detail drawer** — right-side `Sheet`, opened by any `chw-NNN` chip
@@ -85,6 +85,9 @@ plus the cross-cutting things that don't slot neatly into a phase.
 
 ## Recently shipped (for context — last 24h)
 
+- [x] `feat`: SSE `/briefing/stream` end-to-end — backend emits
+  `tool_start` / `tool_done` / `response` (with trace_id + answer_doc),
+  frontend EventSource wired so plan timeline ticks live.
 - [x] `fix(frontend)`: `BACKEND_URL` default 8001→8000; split `HealthResponse`
   into `LivenessResponse` + `ReadinessResponse` matching the backend, plus
   a `getReady()` function that doesn't throw on 503.
