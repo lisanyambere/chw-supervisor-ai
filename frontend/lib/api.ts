@@ -85,8 +85,10 @@ export type LivenessResponse = {
   status: "ok";
 };
 
-export async function getHealth(): Promise<LivenessResponse> {
-  const res = await fetch(`${BACKEND_URL}/healthz`);
+export async function getHealth(
+  opts: { signal?: AbortSignal } = {},
+): Promise<LivenessResponse> {
+  const res = await fetch(`${BACKEND_URL}/healthz`, { signal: opts.signal });
   if (!res.ok) throw new Error(`healthz failed: ${res.status}`);
   return (await res.json()) as LivenessResponse;
 }
@@ -106,8 +108,10 @@ export type ReadinessResponse = {
   chws_loaded: number;
 };
 
-export async function getReady(): Promise<ReadinessResponse> {
-  const res = await fetch(`${BACKEND_URL}/readyz`);
+export async function getReady(
+  opts: { signal?: AbortSignal } = {},
+): Promise<ReadinessResponse> {
+  const res = await fetch(`${BACKEND_URL}/readyz`, { signal: opts.signal });
   if (res.status !== 200 && res.status !== 503) {
     throw new Error(`readyz failed: ${res.status}`);
   }
