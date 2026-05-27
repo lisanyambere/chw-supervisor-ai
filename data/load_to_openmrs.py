@@ -457,8 +457,32 @@ def post_practitioners(practitioners: list) -> dict:
     return mapping
 
 
+def encounter_already_exists(subject_uuid: str, period_start: str) -> bool:
+    # OpenMRS Encounter search by (patient, date). The `date` param defaults
+    # to eq when no prefix is given. We rely on exact period.start match —
+    # the overlay generator stamps unique minute-resolution timestamps so
+    # collisions across distinct encounters are vanishingly unlikely.
+    qs = f"patient={subject_uuid}&date={period_start}"
+    url = f"{FHIR_BASE}/Encounter?{qs}&_summary=count"
+    req = Request(
+        url,
+        headers={
+            "Authorization": auth_header(),
+            "Accept": "application/fhir+json",
+        },
+    )
+    try:
+        with urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        return int(data.get("total", 0)) > 0
+    except Exception:
+        # Treat lookup failures as "not present" so we don't lose data; a
+        # silent dup is a much smaller problem than a silent drop.
+        return False
+
+
 def post_encounters(encounters: list, patient_map: dict, chw_map: dict):
-    skipped = ok = fail = 0
+    skipped = ok = fail = duplicate = 0
     failures: list = []
 
     shaped_list = []
@@ -469,13 +493,27 @@ def post_encounters(encounters: list, patient_map: dict, chw_map: dict):
         else:
             shaped_list.append(shaped)
 
+    def task(e: dict) -> tuple[bool, str, bool]:
+        # Returns (success, error, was_duplicate). Duplicate short-circuits
+        # the POST so re-running the seed against a partially-loaded
+        # database doesn't double rows.
+        subj_ref = e["subject"]["reference"]
+        subj_uuid = subj_ref.split("/", 1)[1] if subj_ref.startswith("Patient/") else ""
+        start = (e.get("period") or {}).get("start", "")
+        if subj_uuid and start and encounter_already_exists(subj_uuid, start):
+            return True, "", True
+        success, _body, err = fhir_post("Encounter", e)
+        return success, err, False
+
     print(f"  POST Encounter x {len(shaped_list)} (skipped {skipped})")
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:
-        futures = [ex.submit(fhir_post, "Encounter", e) for e in shaped_list]
+        futures = [ex.submit(task, e) for e in shaped_list]
         done = 0
         for fut in as_completed(futures):
-            success, _body, err = fut.result()
-            if success:
+            success, err, was_dup = fut.result()
+            if was_dup:
+                duplicate += 1
+            elif success:
                 ok += 1
             else:
                 fail += 1
@@ -483,10 +521,13 @@ def post_encounters(encounters: list, patient_map: dict, chw_map: dict):
                     failures.append(err)
             done += 1
             if done % 100 == 0 or done == len(shaped_list):
-                print(f"    {done}/{len(shaped_list)} ok={ok} fail={fail}")
+                print(
+                    f"    {done}/{len(shaped_list)} "
+                    f"ok={ok} dup={duplicate} fail={fail}"
+                )
     for f in failures:
         print(f"    Sample failure: {f}")
-    return ok, fail, skipped
+    return ok, fail, skipped, duplicate
 
 
 def smoke_test() -> None:
@@ -541,7 +582,9 @@ def main() -> None:
     chw_map = post_practitioners(practitioners)
 
     print("\nPhase 3 - CHW Encounters")
-    enc_ok, enc_fail, enc_skip = post_encounters(encounters, patient_map, chw_map)
+    enc_ok, enc_fail, enc_skip, enc_dup = post_encounters(
+        encounters, patient_map, chw_map
+    )
 
     out_path = fixtures / "id_map.json"
     out_path.write_text(json.dumps({
@@ -554,7 +597,10 @@ def main() -> None:
     print(f"  Patients      ok={len(patient_map)}/{len(patients)}")
     print(f"  Deaths        ok={death_ok}/{len(deaths)} (fail={death_fail})")
     print(f"  Practitioners ok={len(chw_map)}/{len(practitioners)}")
-    print(f"  Encounters    ok={enc_ok}/{len(encounters)} (fail={enc_fail}, skipped={enc_skip})")
+    print(
+        f"  Encounters    ok={enc_ok}/{len(encounters)} "
+        f"(dup={enc_dup}, fail={enc_fail}, skipped={enc_skip})"
+    )
 
     smoke_test()
 
