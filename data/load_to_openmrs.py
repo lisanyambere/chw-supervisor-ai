@@ -530,24 +530,89 @@ def post_encounters(encounters: list, patient_map: dict, chw_map: dict):
     return ok, fail, skipped, duplicate
 
 
-def smoke_test() -> None:
-    print("\nSmoke tests:")
-    endpoints = [
-        ("Patient count",      f"{FHIR_BASE}/Patient?_summary=count"),
-        ("Practitioner count", f"{FHIR_BASE}/Practitioner?_summary=count"),
-        ("Encounter count",    f"{FHIR_BASE}/Encounter?_summary=count"),
-    ]
-    for label, url in endpoints:
-        req = Request(url, headers={
+def _fhir_get(url: str) -> dict | None:
+    req = Request(
+        url,
+        headers={
             "Authorization": auth_header(),
             "Accept": "application/fhir+json",
-        })
-        try:
-            with urlopen(req, timeout=15) as resp:
-                data = json.loads(resp.read())
-                print(f"  {label}: {data.get('total', '?')}")
-        except Exception as e:
-            print(f"  {label}: ERROR - {e}")
+        },
+    )
+    try:
+        with urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
+    except Exception:
+        return None
+
+
+def smoke_test(patient_map: dict, chw_map: dict) -> bool:
+    # Returns True on pass, False on fail. The caller decides whether to
+    # exit non-zero — a failed smoke means the seed succeeded in posting
+    # bytes but the data isn't usable by the agent, which is silently
+    # worse than an outright failure.
+    print("\nSmoke tests:")
+    passed = True
+
+    # Counts (informational, never fail).
+    for label, path in [
+        ("Patient count",      "Patient"),
+        ("Practitioner count", "Practitioner"),
+        ("Encounter count",    "Encounter"),
+    ]:
+        data = _fhir_get(f"{FHIR_BASE}/{path}?_summary=count")
+        total = data.get("total", "?") if data else "ERROR"
+        print(f"  {label}: {total}")
+
+    # 1. Participants must survive round-trip. Sample 20 encounters; if <50%
+    #    carry a participant block, the participant references were silently
+    #    scrubbed (typically because of stale practitioner UUIDs).
+    page = _fhir_get(f"{FHIR_BASE}/Encounter?_count=20")
+    entries = (page or {}).get("entry") or []
+    if not entries:
+        print("  Participant round-trip: SKIP (no encounters to sample)")
+    else:
+        with_part = sum(
+            1 for e in entries if (e.get("resource") or {}).get("participant")
+        )
+        pct = (with_part / len(entries)) * 100
+        verdict = "OK" if pct >= 50 else "FAIL"
+        print(
+            f"  Participant round-trip: {with_part}/{len(entries)} ({pct:.0f}%) {verdict}"
+        )
+        if pct < 50:
+            print(
+                "    Participants were stripped on persistence. "
+                "Almost always caused by stale practitioner UUIDs in the "
+                "encounter payload. Inspect chw_map vs live Practitioners."
+            )
+            passed = False
+
+    # 2. id_map UUIDs must resolve. Every practitioner uuid is checked; a
+    #    20-patient sample suffices to catch wholesale drift.
+    bad_pracs = []
+    for chw_id, uuid in chw_map.items():
+        data = _fhir_get(f"{FHIR_BASE}/Practitioner/{uuid}")
+        if not data or data.get("resourceType") == "OperationOutcome":
+            bad_pracs.append((chw_id, uuid))
+    print(f"  Practitioner UUIDs resolve: {len(chw_map) - len(bad_pracs)}/{len(chw_map)}")
+    if bad_pracs:
+        print(f"    Unreachable: {bad_pracs[:3]}{'...' if len(bad_pracs) > 3 else ''}")
+        passed = False
+
+    sample_pats = list(patient_map.values())[:20]
+    bad_pats = []
+    for uuid in sample_pats:
+        data = _fhir_get(f"{FHIR_BASE}/Patient/{uuid}")
+        if not data or data.get("resourceType") == "OperationOutcome":
+            bad_pats.append(uuid)
+    print(f"  Patient UUIDs resolve (sample): {len(sample_pats) - len(bad_pats)}/{len(sample_pats)}")
+    if bad_pats:
+        print(f"    Unreachable: {bad_pats[:3]}{'...' if len(bad_pats) > 3 else ''}")
+        passed = False
+
+    print()
+    print("  Overall:", "PASS" if passed else "FAIL")
+    return passed
 
 
 def main() -> None:
@@ -602,7 +667,10 @@ def main() -> None:
         f"(dup={enc_dup}, fail={enc_fail}, skipped={enc_skip})"
     )
 
-    smoke_test()
+    if not smoke_test(patient_map, chw_map):
+        # Non-zero exit so CI / Makefile / seed.sh halt loudly. The data is
+        # in OpenMRS, but the agent will return garbage if we proceed.
+        sys.exit(2)
 
 
 if __name__ == "__main__":
