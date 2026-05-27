@@ -23,6 +23,10 @@ services:
       OMRS_CONFIG_CONNECTION_PASSWORD: ${OPENMRS_DB_PASSWORD:-openmrs}
     volumes:
       - openmrs-data:/openmrs/data
+      # Pre-supplied runtime properties bypass the initial-setup wizard.
+      # Without this OpenMRS sits at /openmrs/initialsetup forever and the
+      # REST API never returns `authenticated: true`.
+      - ./openmrs/openmrs-runtime.properties:/openmrs/openmrs-runtime.properties:ro
     healthcheck:
       # See docker-compose.yml for the rationale — /openmrs/health is 404.
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/openmrs/ || exit 1"]

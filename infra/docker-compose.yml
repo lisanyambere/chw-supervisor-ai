@@ -18,6 +18,9 @@ services:
       JAVA_OPTS: "-Xms512m -Xmx1536m"
     volumes:
       - openmrs-data:/openmrs/data
+      # Bypass the initial-setup wizard. README claims this is pre-mounted;
+      # was actually never mounted until this fix.
+      - ./openmrs/openmrs-runtime.properties:/openmrs/openmrs-runtime.properties:ro
     healthcheck:
       # /openmrs/health does not exist on this image — Tomcat returns 404
       # for it, which left the container permanently reporting unhealthy
