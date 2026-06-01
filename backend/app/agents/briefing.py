@@ -197,8 +197,10 @@ async def run_briefing(
                             "tool_plan": tool_plan,
                         },
                     )
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as e:  # noqa: BLE001
+                    log.debug(
+                        "langfuse.span_update_failed", where="agent_span", error=str(e)
+                    )
             return result
     finally:
         if own_fhir:
@@ -352,8 +354,10 @@ async def _run_briefing_inner(
                             else None
                         ),
                     )
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as e:  # noqa: BLE001
+                    log.debug(
+                        "langfuse.span_update_failed", where="generation", error=str(e)
+                    )
         else:
             completion = await llm.chat(messages=messages, tools=tools)
 
@@ -404,8 +408,12 @@ async def _run_briefing_inner(
                     result = await execute(call.function.name, args, fhir)
                     try:
                         ts.update(output=result)
-                    except Exception:  # noqa: BLE001
-                        pass
+                    except Exception as e:  # noqa: BLE001
+                        log.debug(
+                            "langfuse.span_update_failed",
+                            where="tool_span",
+                            error=str(e),
+                        )
             else:
                 result = await execute(call.function.name, args, fhir)
             ms = int((time.perf_counter() - t0) * 1000)
