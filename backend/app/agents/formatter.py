@@ -135,6 +135,9 @@ def _normalise_section(section: Any) -> dict[str, Any] | None:
         return None
     kind = section.get("kind")
     if kind not in _VALID_SECTION_KINDS:
+        # A kind the renderer can't draw vanishes silently otherwise — surface
+        # it so a new LLM-emitted section type doesn't disappear unnoticed.
+        log.warning("formatter.unknown_section_kind", kind=kind)
         return None
 
     if kind == "stat-row":
