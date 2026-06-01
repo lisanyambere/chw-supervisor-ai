@@ -23,6 +23,27 @@ class ReadinessResponse(BaseModel):
     chws_loaded: int
 
 
+class ChwPatientRow(BaseModel):
+    """One patient in a CHW's recent panel."""
+
+    patient_uuid: str
+    name: str
+    last_encounter_date: str | None = None
+    encounter_count: int
+
+
+class ChwDetailResponse(BaseModel):
+    """Detail for the CHW drawer: identity, recent load, and patient panel."""
+
+    chw_id: str
+    practitioner_uuid: str
+    name: str
+    days: int
+    encounter_count: int
+    patient_count: int
+    patients: list[ChwPatientRow] = Field(default_factory=list)
+
+
 class BriefingRequest(BaseModel):
     question: str = Field(
         default="Give me the Monday-morning briefing for the team.",

@@ -19,6 +19,8 @@ from app.api.schemas import (
     AnswerDocOut,
     BriefingRequest,
     BriefingResponse,
+    ChwDetailResponse,
+    ChwPatientRow,
     LivenessResponse,
     PlanStepOut,
     ReadinessResponse,
@@ -30,6 +32,8 @@ from app.llm import get_llm
 from app.observability import aflush as langfuse_flush
 from app.observability import get_langfuse, metrics_router
 from app.observability.metrics import REQUEST_LATENCY
+from app.tools.chw import chw_patient_panel, count_chw_encounters
+from app.tools.patient import _format_name
 
 log = get_logger(__name__)
 
@@ -155,6 +159,73 @@ async def readyz(fhir: FhirClient = Depends(get_fhir)) -> Response:
     return JSONResponse(
         content=body.model_dump(),
         status_code=200 if ready else 503,
+    )
+
+
+@app.get(
+    "/chw/{chw_id}",
+    response_model=ChwDetailResponse,
+    responses={404: {"description": "Unknown CHW id"}},
+)
+async def chw_detail(
+    chw_id: str,
+    days: int = Query(30, ge=1, le=365),
+    fhir: FhirClient = Depends(get_fhir),
+) -> ChwDetailResponse:
+    # Recent panel doubles as the existence check — it resolves the CHW id
+    # and returns an `error` key for unknown ids.
+    panel = await chw_patient_panel(fhir, chw_id=chw_id, days=days, limit=25)
+    if "error" in panel:
+        raise HTTPException(status_code=404, detail=panel["error"])
+
+    count = await count_chw_encounters(fhir, chw_id=chw_id, days=days)
+    practitioner_uuid = count["practitioner_uuid"]
+
+    # Resolve the CHW's display name. Best-effort — a read failure shouldn't
+    # sink the whole drawer.
+    chw_name = ""
+    try:
+        pract = await fhir.read("Practitioner", practitioner_uuid)
+        chw_name = _format_name(pract.get("name") or [])
+    except Exception as e:  # noqa: BLE001
+        log.warning(
+            "chw_detail.practitioner_read_failed",
+            uuid=practitioner_uuid,
+            error=str(e),
+        )
+
+    # Resolve patient display names concurrently. Same best-effort posture:
+    # a patient that won't read back just shows an empty name.
+    async def _name_for(uuid: str) -> str:
+        try:
+            p = await fhir.read("Patient", uuid)
+            return _format_name(p.get("name") or [])
+        except Exception as e:  # noqa: BLE001
+            log.warning(
+                "chw_detail.patient_read_failed", uuid=uuid, error=str(e)
+            )
+            return ""
+
+    raw_rows = panel["patients"]
+    names = await asyncio.gather(*(_name_for(r["patient_uuid"]) for r in raw_rows))
+    rows = [
+        ChwPatientRow(
+            patient_uuid=r["patient_uuid"],
+            name=name,
+            last_encounter_date=r["last_encounter_date"],
+            encounter_count=r["encounter_count"],
+        )
+        for r, name in zip(raw_rows, names, strict=True)
+    ]
+
+    return ChwDetailResponse(
+        chw_id=chw_id,
+        practitioner_uuid=practitioner_uuid,
+        name=chw_name,
+        days=days,
+        encounter_count=count["encounter_count"],
+        patient_count=panel["patient_count"],
+        patients=rows,
     )
 
 
