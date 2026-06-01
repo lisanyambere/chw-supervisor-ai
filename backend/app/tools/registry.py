@@ -14,8 +14,11 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from app.core import get_logger
 from app.fhir import FhirClient
 from app.observability.metrics import TOOL_CALL_DURATION
+
+log = get_logger(__name__)
 
 ToolFn = Callable[..., Awaitable[Any]]
 
@@ -82,6 +85,8 @@ async def execute(name: str, args: dict[str, Any], client: FhirClient) -> Any:
         TOOL_CALL_DURATION.labels(tool=name, outcome="error").observe(
             time.perf_counter() - start
         )
+        # Return the error to the agent, but don't lose the stack trace.
+        log.warning("tool.failed", tool=name, error=f"{type(e).__name__}: {e}")
         return {"error": f"{type(e).__name__}: {e}"}
     TOOL_CALL_DURATION.labels(tool=name, outcome="ok").observe(
         time.perf_counter() - start
