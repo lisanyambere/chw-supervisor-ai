@@ -9,8 +9,25 @@ import { AiTurn, UserTurn, type Turn } from "@/components/Conversation";
 import { ChwDrawer } from "@/components/ChwDrawer";
 import { getReady, streamBriefing, type PlanStep } from "@/lib/api";
 
+const STORAGE_KEY = "cha:turns:v1";
+
 function uid() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+// Load persisted turns, dropping any AI turn that never finished streaming
+// so a reload mid-run never resurrects a stuck spinner.
+function loadTurns(): Turn[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Turn[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((t) => t.role !== "ai" || t.done);
+  } catch {
+    return [];
+  }
 }
 
 function nowHHMM() {
@@ -40,8 +57,29 @@ export default function HomePage() {
   // while pinned so a manual scroll-up to re-read isn't yanked back down.
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pinnedRef = useRef(true);
+  // Gate persistence until the initial hydrate runs, otherwise the first
+  // [] render would clobber stored history before we read it.
+  const hydratedRef = useRef(false);
 
   useEffect(() => () => closeStream.current?.(), []);
+
+  // Hydrate persisted conversation once on mount.
+  useEffect(() => {
+    const stored = loadTurns();
+    if (stored.length > 0) setTurns(stored);
+    hydratedRef.current = true;
+  }, []);
+
+  // Persist on every change once hydrated. Only completed turns survive a
+  // reload (loadTurns filters the rest).
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(turns));
+    } catch {
+      // Quota or private-mode failure — history just won't persist.
+    }
+  }, [turns]);
 
   // Mount-time backend probe. Aborts on unmount so a slow probe doesn't
   // setState after teardown.
