@@ -420,3 +420,73 @@ html, body {
 }
 .btn-ghost:hover { background: var(--surface-2); }
 
+/* ─── CHW detail drawer ──────────────────────────────────────────────── */
+.drawer-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: color-mix(in oklch, var(--ink) 30%, transparent);
+  display: flex; justify-content: flex-end;
+  animation: drawer-fade 140ms ease;
+}
+.drawer-panel {
+  width: min(420px, 92vw);
+  height: 100%;
+  background: var(--surface);
+  border-left: 1px solid var(--line-2);
+  box-shadow: -12px 0 32px -16px color-mix(in oklch, var(--ink) 50%, transparent);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  animation: drawer-slide 160ms ease;
+}
+.drawer-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0;
+  background: var(--surface);
+}
+.drawer-head__id {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px; color: var(--ink-3);
+}
+.drawer-head__name {
+  font-size: 18px; font-weight: 600; color: var(--ink);
+  margin-top: 2px;
+}
+.drawer-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-3); cursor: pointer;
+  transition: all 120ms ease;
+}
+.drawer-close:hover { background: var(--surface-2); color: var(--ink); }
+.drawer-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
+.drawer-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.drawer-stat {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--surface-2);
+}
+.drawer-stat__value { font-size: 26px; font-weight: 600; color: var(--ink); }
+.drawer-stat__label { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+.drawer-muted { padding: 16px 20px; font-size: 13px; color: var(--ink-3); }
+.drawer-muted--inset { padding: 14px; }
+.drawer-error {
+  margin: 16px 20px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklch, var(--alert) 30%, var(--line));
+  background: var(--alert-bg);
+  color: var(--alert);
+  font-size: 13px;
+}
+@keyframes drawer-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawer-slide {
+  from { transform: translateX(12px); opacity: 0.4; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+

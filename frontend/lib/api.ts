@@ -79,6 +79,43 @@ export async function postBriefing(
   return (await res.json()) as BriefingResponse;
 }
 
+// ─── /chw/{chw_id} (drawer detail) ──────────────────────────────────────────
+
+export type ChwPatientRow = {
+  patient_uuid: string;
+  name: string;
+  last_encounter_date: string | null;
+  encounter_count: number;
+};
+
+export type ChwDetail = {
+  chw_id: string;
+  practitioner_uuid: string;
+  name: string;
+  days: number;
+  encounter_count: number;
+  patient_count: number;
+  patients: ChwPatientRow[];
+};
+
+export async function getChwDetail(
+  chwId: string,
+  opts: { days?: number; signal?: AbortSignal } = {},
+): Promise<ChwDetail> {
+  const params = new URLSearchParams();
+  if (opts.days !== undefined) params.set("days", String(opts.days));
+  const qs = params.toString();
+  const res = await fetch(
+    `${BACKEND_URL}/chw/${encodeURIComponent(chwId)}${qs ? `?${qs}` : ""}`,
+    { signal: opts.signal },
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`chw detail failed: ${res.status} ${detail.slice(0, 200)}`);
+  }
+  return (await res.json()) as ChwDetail;
+}
+
 // ─── /healthz (liveness) ────────────────────────────────────────────────────
 
 export type LivenessResponse = {
