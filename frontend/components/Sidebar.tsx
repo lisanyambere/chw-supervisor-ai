@@ -10,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useDebug } from "@/lib/debug";
 
 type NavId = "brief" | "alert" | "team" | "patient" | "chart";
 
@@ -23,7 +24,7 @@ const NAV: { id: NavId; label: string; icon: React.ReactNode; badge?: string; to
 
 const OBS = [
   { label: "langfuse",   href: "http://localhost:3100" },
-  { label: "grafana",    href: "http://localhost:3001" },
+  { label: "grafana",    href: "http://localhost:3200" },
   { label: "openmrs",    href: "http://localhost:8080/openmrs" },
   { label: "prometheus", href: "http://localhost:9090" },
 ];
@@ -35,6 +36,7 @@ export function Sidebar({
   active: NavId;
   onSelect: (id: NavId) => void;
 }) {
+  const { debug } = useDebug();
   return (
     <aside
       className="border-r border-[var(--line)] flex flex-col"
@@ -50,13 +52,13 @@ export function Sidebar({
         </div>
         <div className="leading-tight">
           <div className="text-[13px] font-semibold">Field Briefing</div>
-          <div className="text-[11px] font-mono text-[var(--ink-3)]">kakamega · v0.3</div>
+          <div className="text-[12px] font-mono text-[var(--ink-3)]">kakamega · v0.3</div>
         </div>
       </div>
 
       {/* Workspace nav */}
       <div className="px-3">
-        <div className="text-[10px] font-mono uppercase tracking-[0.07em] text-[var(--ink-4)] px-2 mb-2">
+        <div className="text-[11px] font-mono uppercase tracking-[0.07em] text-[var(--ink-3)] px-2 mb-2">
           workspace
         </div>
         <nav className="flex flex-col gap-0.5">
@@ -78,26 +80,28 @@ export function Sidebar({
         </nav>
       </div>
 
-      {/* Observability */}
-      <div className="px-3 mt-6">
-        <div className="text-[10px] font-mono uppercase tracking-[0.07em] text-[var(--ink-4)] px-2 mb-2">
-          observability
+      {/* Observability — developer links, hidden unless Debug Mode is on. */}
+      {debug && (
+        <div className="px-3 mt-6">
+          <div className="text-[11px] font-mono uppercase tracking-[0.07em] text-[var(--ink-3)] px-2 mb-2">
+            observability
+          </div>
+          <nav className="flex flex-col gap-0.5">
+            {OBS.map((o) => (
+              <a
+                key={o.label}
+                href={o.href}
+                target="_blank"
+                rel="noreferrer"
+                className="nav-item font-mono text-[12px] text-[var(--ink-2)]"
+              >
+                <span>{o.label}</span>
+                <ExternalLink size={11} className="ml-auto text-[var(--ink-4)]" />
+              </a>
+            ))}
+          </nav>
         </div>
-        <nav className="flex flex-col gap-0.5">
-          {OBS.map((o) => (
-            <a
-              key={o.label}
-              href={o.href}
-              target="_blank"
-              rel="noreferrer"
-              className="nav-item font-mono text-[12px] text-[var(--ink-2)]"
-            >
-              <span>{o.label}</span>
-              <ExternalLink size={11} className="ml-auto text-[var(--ink-4)]" />
-            </a>
-          ))}
-        </nav>
-      </div>
+      )}
 
       {/* User block */}
       <div className="mt-auto px-4 py-4 border-t border-[var(--line)] flex items-center gap-2.5">

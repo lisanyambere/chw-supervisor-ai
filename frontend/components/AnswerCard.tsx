@@ -1,6 +1,12 @@
 "use client";
 
-import { ArrowRight, ExternalLink } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  ExternalLink,
+  Lightbulb,
+} from "lucide-react";
 import type {
   AnswerDoc,
   PanelRow,
@@ -10,6 +16,7 @@ import type {
   Tone,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { useDebug } from "@/lib/debug";
 
 /* ─── small helpers ──────────────────────────────────────────────────── */
 
@@ -20,10 +27,17 @@ function ChwChip({
   id: string;
   onClick?: (id: string) => void;
 }) {
+  // Render a plain <span> unless an onClick is supplied. Inside a ranked row
+  // (which is itself a <button>) a nested <button> is invalid HTML and trips
+  // a hydration error; the row already handles the click, so the chip there
+  // is decorative. Standalone, clickable chips still get a real button.
+  if (!onClick) {
+    return <span className="chip">{id}</span>;
+  }
   return (
     <button
       className="chip chip-clickable"
-      onClick={() => onClick?.(id)}
+      onClick={() => onClick(id)}
       type="button"
     >
       {id}
@@ -31,10 +45,11 @@ function ChwChip({
   );
 }
 
-function calloutGlyph(tone: Tone) {
-  if (tone === "alert") return "!";
-  if (tone === "warn") return "?";
-  return "✓";
+function CalloutIcon({ tone }: { tone: Tone }) {
+  // A lightbulb reads as "insight", not the old "?" which implied confusion.
+  const Icon =
+    tone === "alert" ? AlertTriangle : tone === "warn" ? Lightbulb : CheckCircle2;
+  return <Icon size={12} strokeWidth={2.5} />;
 }
 
 /* ─── section renderers ──────────────────────────────────────────────── */
@@ -69,7 +84,9 @@ function Callout({
 }) {
   return (
     <div className={cn("callout", `callout--${tone}`)}>
-      <div className="callout__icon">{calloutGlyph(tone)}</div>
+      <div className="callout__icon">
+        <CalloutIcon tone={tone} />
+      </div>
       <div>
         <div className="callout__title">{title}</div>
         <div className="callout__body">{body}</div>
@@ -205,6 +222,7 @@ function TraceFooter({
   sources: string[];
   traceId: string | null;
 }) {
+  const { debug } = useDebug();
   const langfuseHost =
     process.env.NEXT_PUBLIC_LANGFUSE_HOST ?? "http://localhost:3100";
   const shortId = traceId ? traceId.slice(0, 8) : null;
@@ -216,7 +234,7 @@ function TraceFooter({
           {s}
         </span>
       ))}
-      {shortId && (
+      {debug && shortId && (
         <a
           className="trace-footer__link inline-flex items-center gap-1"
           href={`${langfuseHost}/trace/${traceId}`}

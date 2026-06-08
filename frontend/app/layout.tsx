@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { Inter_Tight, JetBrains_Mono, Source_Serif_4 } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { DebugProvider } from "@/lib/debug";
 
 export const metadata: Metadata = {
   title: "Field Briefing — Community Health AI",
@@ -8,22 +9,14 @@ export const metadata: Metadata = {
     "Supervisor workspace for community health worker oversight. Built on OpenMRS FHIR data.",
 };
 
-// Self-host the three families via next/font. This inlines the @font-face
-// rules so the browser never falls back to a system font for the weights
-// we actually use — that fallback is what made small sidebar labels look
-// pixelated/faux-bold before this change.
-const sans = Inter_Tight({
+// Inter is the workhorse UI face — highly legible at dashboard sizes and the
+// only display/body family we use now (the old serif/mono split read as
+// "textbook meets terminal"). JetBrains Mono survives only for genuinely
+// code-like data: tool names, ids, and tabular figures behind Debug Mode.
+const sans = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-sans",
-  display: "swap",
-});
-
-const serif = Source_Serif_4({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  style: ["normal", "italic"],
-  variable: "--font-serif",
   display: "swap",
 });
 
@@ -40,11 +33,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      className={`${sans.variable} ${serif.variable} ${mono.variable}`}
-    >
-      <body className="antialiased">{children}</body>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+      <body className="antialiased">
+        <DebugProvider>{children}</DebugProvider>
+      </body>
     </html>
   );
 }

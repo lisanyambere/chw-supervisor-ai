@@ -32,10 +32,10 @@ export function PlanTimeline({
         className="flex items-center justify-between px-[14px] py-2.5 border-b border-[var(--line)]"
         style={{ background: "var(--surface-2)" }}
       >
-        <div className="font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--ink-3)]">
+        <div className="font-mono text-[12px] uppercase tracking-[0.07em] text-[var(--ink-3)]">
           Tool plan
         </div>
-        <div className="font-mono text-[11px]">
+        <div className="font-mono text-[12px]">
           {done ? (
             <span className="text-[var(--ok)]">
               completed in {totalMs}ms

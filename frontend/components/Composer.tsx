@@ -2,6 +2,7 @@
 
 import { SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useDebug } from "@/lib/debug";
 
 export function Composer({
   busy,
@@ -14,6 +15,7 @@ export function Composer({
   disabled?: boolean;
   disabledReason?: string;
 }) {
+  const { debug } = useDebug();
   const [value, setValue] = useState("");
   const ref = useRef<HTMLTextAreaElement | null>(null);
 
@@ -65,13 +67,17 @@ export function Composer({
         </div>
         <div className="composer__hint">
           <span>↵ send · ⇧↵ newline</span>
-          <span>model: gpt-5.5 (azure)</span>
-          <span>lookback: 30d</span>
+          {debug && <span>model: gpt-5.5 (azure)</span>}
+          {debug && <span>lookback: 30d</span>}
           <span className="flex items-center gap-1.5">
             <span
               className={`pulse-dot ${disabled ? "pulse-dot--alert" : "pulse-dot--ok"}`}
             />
-            {disabled ? "backend down" : "fhir healthy"}
+            {disabled
+              ? "Backend offline"
+              : debug
+                ? "fhir healthy"
+                : "Connected"}
           </span>
           <span className="right text-[var(--ink-3)]">
             verify in OpenMRS before action

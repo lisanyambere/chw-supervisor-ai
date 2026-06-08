@@ -29,15 +29,18 @@ export function Hero({ onAsk }: { onAsk: (q: string) => void }) {
 
   return (
     <div className="max-w-[940px] mx-auto px-6 pt-12 pb-10">
-      <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--ink-3)] flex items-center gap-2 mb-5">
+      <p className="text-[12px] uppercase tracking-[0.08em] font-medium text-[var(--ink-3)] flex items-center gap-2 mb-5">
         <span className="pulse-dot" />
         {dateStr}
       </p>
-      <h1 className="font-serif text-[44px] leading-[1.05] tracking-[-0.02em] max-w-[18ch]">
-        What <em className="italic" style={{ color: "var(--accent-ink)" }}>changed</em>{" "}
+      <h1 className="text-[30px] font-semibold leading-[1.15] tracking-[-0.02em] max-w-[20ch]">
+        What{" "}
+        <span className="font-bold" style={{ color: "var(--accent-ink)" }}>
+          changed
+        </span>{" "}
         on the team this week?
       </h1>
-      <p className="text-[15px] text-[var(--ink-2)] max-w-[56ch] mt-5">
+      <p className="text-[15px] text-[var(--ink-2)] max-w-[56ch] mt-4 leading-relaxed">
         Generate a Monday-morning briefing from FHIR data, ask follow-ups in
         plain English, and inspect every tool call the agent made along the way.
       </p>

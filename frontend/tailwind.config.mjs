@@ -32,7 +32,9 @@ export default {
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
-        serif: ["var(--font-serif)", "ui-serif", "serif"],
+        // Serif is retired — repointed to sans so any leftover `font-serif`
+        // class renders in the modern UI face instead of a system serif.
+        serif: ["var(--font-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       borderRadius: {

@@ -3,6 +3,7 @@
 import type { AnswerDoc, PlanStep } from "@/lib/api";
 import { AnswerCard } from "@/components/AnswerCard";
 import { PlanTimeline } from "@/components/PlanTimeline";
+import { useDebug } from "@/lib/debug";
 
 export type Turn =
   | { id: string; role: "user"; q: string; t: string }
@@ -27,14 +28,9 @@ export function UserTurn({ q, t }: { q: string; t: string }) {
         >
           MK
         </div>
-        <div className="font-mono text-[11px] text-[var(--ink-3)]">you · {t}</div>
+        <div className="font-mono text-[12px] text-[var(--ink-3)]">you · {t}</div>
       </div>
-      <div
-        className="font-serif text-[22px] leading-[1.3] pl-4"
-        style={{ borderLeft: "2px solid var(--line-2)" }}
-      >
-        {q}
-      </div>
+      <div className="user-turn">{q}</div>
     </div>
   );
 }
@@ -46,10 +42,19 @@ export function AiTurn({
   turn: Extract<Turn, { role: "ai" }>;
   onSelectChw?: (id: string) => void;
 }) {
+  const { debug } = useDebug();
   return (
     <div className="max-w-[940px] mx-auto px-6 pt-6 space-y-4">
-      {turn.plan.length > 0 && (
+      {/* The tool plan is developer instrumentation — Debug Mode only. */}
+      {debug && turn.plan.length > 0 && (
         <PlanTimeline plan={turn.plan} activeIdx={turn.activeIdx} done={turn.done} />
+      )}
+      {/* Default view gets a clean "working" pill instead of the raw plan. */}
+      {!debug && !turn.done && (
+        <div className="thinking">
+          <span className="spinner" />
+          Analyzing the team’s activity…
+        </div>
       )}
       {turn.doc && (
         <AnswerCard
