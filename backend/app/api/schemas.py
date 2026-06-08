@@ -44,6 +44,41 @@ class ChwDetailResponse(BaseModel):
     patients: list[ChwPatientRow] = Field(default_factory=list)
 
 
+class ChwRosterEntry(BaseModel):
+    """One CHW in the roster — straight from the id_map, no FHIR reads."""
+
+    chw_id: str
+    practitioner_uuid: str
+
+
+class ActivityDay(BaseModel):
+    """One day in the activity chart."""
+
+    date: str  # ISO yyyy-mm-dd
+    weekday: str  # "Mon".."Sun"
+    encounter_count: int
+    is_weekend: bool
+    is_zero: bool
+
+
+class ActivityStats(BaseModel):
+    min: int
+    max: int
+    mean: float
+    total: int
+    zero_days: int
+    active_days: int
+
+
+class ActivityResponse(BaseModel):
+    """Daily CHW encounter series for the activity charts view."""
+
+    days: int
+    chw_id: str | None = None
+    series: list[ActivityDay] = Field(default_factory=list)
+    stats: ActivityStats
+
+
 class BriefingRequest(BaseModel):
     question: str = Field(
         default="Give me the Monday-morning briefing for the team.",

@@ -16,11 +16,13 @@ from starlette.responses import Response
 
 from app.agents import StreamEvent, format_answer, run_briefing
 from app.api.schemas import (
+    ActivityResponse,
     AnswerDocOut,
     BriefingRequest,
     BriefingResponse,
     ChwDetailResponse,
     ChwPatientRow,
+    ChwRosterEntry,
     LivenessResponse,
     PlanStepOut,
     ReadinessResponse,
@@ -32,7 +34,7 @@ from app.llm import get_llm
 from app.observability import aflush as langfuse_flush
 from app.observability import get_langfuse, metrics_router
 from app.observability.metrics import REQUEST_LATENCY
-from app.tools.chw import chw_patient_panel, count_chw_encounters
+from app.tools.chw import activity_series, chw_patient_panel, count_chw_encounters
 from app.tools.patient import _format_name
 
 log = get_logger(__name__)
@@ -227,6 +229,35 @@ async def chw_detail(
         patient_count=panel["patient_count"],
         patients=rows,
     )
+
+
+@app.get("/chws", response_model=list[ChwRosterEntry])
+async def chws() -> list[ChwRosterEntry]:
+    # Roster straight from the id_map — no FHIR round-trips. Powers the
+    # activity-chart CHW selector (and, later, the roster view).
+    idmap = get_id_map()
+    return [
+        ChwRosterEntry(chw_id=cid, practitioner_uuid=uuid)
+        for cid, uuid in sorted(idmap.practitioners.items())
+    ]
+
+
+@app.get(
+    "/activity",
+    response_model=ActivityResponse,
+    responses={404: {"description": "Unknown CHW id"}},
+)
+async def activity(
+    days: int = Query(30, ge=1, le=90),
+    chw_id: str | None = Query(None),
+    fhir: FhirClient = Depends(get_fhir),
+) -> ActivityResponse:
+    # Daily CHW encounter counts for the charts view. Team-wide by default,
+    # or scoped to one CHW. 404s on an unknown chw_id (the helper signals it).
+    data = await activity_series(fhir, days=days, chw_id=chw_id)
+    if "error" in data:
+        raise HTTPException(status_code=404, detail=data["error"])
+    return ActivityResponse(**data)
 
 
 @app.post("/briefing", response_model=BriefingResponse)

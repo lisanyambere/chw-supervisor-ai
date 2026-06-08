@@ -334,3 +334,79 @@ async def chw_patient_panel(
         "patient_count": len(seen),
         "patients": list(seen.values()),
     }
+
+
+# ---------------------------------------------------------------------------
+# Activity series (UI charts) — not a tool; consumed by GET /activity.
+# ---------------------------------------------------------------------------
+
+
+async def activity_series(
+    client: FhirClient, days: int = 30, chw_id: str | None = None
+) -> dict[str, Any]:
+    """Daily CHW encounter counts for the activity chart.
+
+    Scoped strictly to the CHW practitioners in the id_map (team-wide or one
+    CHW), so the chart reflects fieldwork only — not the OpenMRS demo patients.
+
+    We fetch each CHW's in-window encounters once (in parallel) and bucket them
+    by their **start date** rather than firing a per-day `_summary=count`. That
+    is deliberate: OpenMRS's Encounter `date` search matches on period *overlap*,
+    which double-counts an encounter across adjacent days and would mask true
+    zero-days — exactly the signal this chart exists to surface.
+    """
+    idmap = get_id_map()
+    if chw_id is not None:
+        uuid = _resolve_practitioner_uuid(chw_id)
+        if uuid is None:
+            return {"error": f"unknown chw_id: {chw_id}"}
+        uuids = [uuid]
+    else:
+        uuids = idmap.chw_uuids
+
+    today = datetime.now(tz=UTC).date()
+    day_dates = [today - timedelta(days=i) for i in range(days - 1, -1, -1)]
+    since = day_dates[0].isoformat()
+
+    async def _starts_for(u: str) -> list[str]:
+        rows = await client.search(
+            "Encounter",
+            params={"participant": u, "date": f"ge{since}", "_count": 200},
+            max_pages=6,
+        )
+        return [((r.get("period") or {}).get("start") or "")[:10] for r in rows]
+
+    per_chw = (
+        await asyncio.gather(*(_starts_for(u) for u in uuids)) if uuids else []
+    )
+    bucket: dict[str, int] = {}
+    for starts in per_chw:
+        for d in starts:
+            if d:
+                bucket[d] = bucket.get(d, 0) + 1
+
+    series = [
+        {
+            "date": d.isoformat(),
+            "weekday": d.strftime("%a"),
+            "encounter_count": bucket.get(d.isoformat(), 0),
+            "is_weekend": d.weekday() >= 5,
+            "is_zero": bucket.get(d.isoformat(), 0) == 0,
+        }
+        for d in day_dates
+    ]
+    counts = [s["encounter_count"] for s in series]
+    zero_days = sum(1 for n in counts if n == 0)
+    return {
+        "days": days,
+        "chw_id": chw_id,
+        "series": series,
+        "stats": {
+            "min": min(counts) if counts else 0,
+            "max": max(counts) if counts else 0,
+            "mean": round(sum(counts) / len(counts), 2) if counts else 0.0,
+            "total": sum(counts),
+            "zero_days": zero_days,
+            "active_days": len(counts) - zero_days,
+        },
+    }
