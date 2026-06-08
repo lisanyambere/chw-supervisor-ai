@@ -5,15 +5,12 @@ plus the cross-cutting things that don't slot neatly into a phase.
 
 ## Next up — recommended order
 
-- **Highest demo value:** CHW detail drawer (Phase 4 #2). `chw-NNN` chips
-  already render but go nowhere — wire them to a right-side Sheet pulling
-  `count_chw_encounters` + `chw_patient_panel`. Makes the conversational
-  UI feel alive.
 - **Best for portfolio polish:** Activity charts view (Phase 4 #3). First
-  non-chat view, visually distinctive for a video/screenshot.
-- **Should-do-before-deploy:** Encounter idempotency bug in
-  `data/load_to_openmrs.py`. A re-run today silently doubles encounter
-  rows — bites any clean-data demo recording.
+  non-chat view, visually distinctive for a video/screenshot. Now unblocked —
+  the 2026-06-08 reseed rebases CHW activity to the current date, so a 30-day
+  chart actually has bars.
+- **Natural follow-on:** CHW roster view (Phase 4 #4). Full 30-row reuse of
+  the ranked-row pattern; pairs with the now-shipped detail drawer.
 - **Phase 6 kickoff:** Production Dockerfiles + `docker-compose.prod.yml`
   so backend + frontend join the existing langfuse / prometheus / grafana
   stack. Unlocks the VM deploy runbook.
@@ -23,16 +20,18 @@ plus the cross-cutting things that don't slot neatly into a phase.
 - [x] **SSE streaming** — `/briefing/stream` emits `tool_start` / `tool_done` /
   `response` events, frontend EventSource wired, plan timeline ticks live.
   Trace id + answer_doc included in final frame. (commits ba4656c, d7c6432, 41a8624)
-- [ ] **Conversation persistence** — drop the reducer into localStorage (start)
-  or Postgres so reloads don't wipe history.
-- [ ] **CHW detail drawer** — right-side `Sheet`, opened by any `chw-NNN` chip
-  or `.ranked__row`. Pulls `count_chw_encounters` + `chw_patient_panel`.
+- [x] **Conversation persistence** — reducer mirrored to localStorage; only
+  completed AI turns rehydrate so a mid-run reload can't resurrect a stuck
+  spinner. (commit ac7fbc6)
+- [x] **CHW detail drawer** — right-side drawer opened by any `chw-NNN` chip
+  or ranked row, backed by a new `GET /chw/{id}` endpoint
+  (`count_chw_encounters` + `chw_patient_panel`). (commits 1d42d47, 7422b4b)
 - [ ] **Activity charts view** — 30-bar daily encounter chart with weekend
   tinting and red zero-day bars. First non-conversational view.
 - [ ] **CHW roster view** — full 30-row reuse of the ranked-row pattern.
-- [ ] **Frontend test infrastructure** — vitest + @testing-library/react. Zero
-  tests today. At minimum cover `postBriefing` error path, Composer busy
-  state, error fallback UI.
+- [~] **Frontend test infrastructure** — vitest + @testing-library/react
+  scaffold landed with api-client tests (postBriefing / getHealth / getReady).
+  Still missing: Composer busy state + error fallback component tests.
 - [x] **Health check on mount** — calls `getReady()` once at app load with
   an AbortController, disables Composer with a reason-specific message
   ("OpenMRS unreachable" vs "cannot reach service") if it fails. Status
@@ -63,19 +62,10 @@ plus the cross-cutting things that don't slot neatly into a phase.
 
 ## Known bugs / gaps (real, observed)
 
-- [ ] **Encounter idempotency** in `data/load_to_openmrs.py` — patients and
-  practitioners are checked by identifier before POST, encounters are not.
-  Re-running the loader doubles the encounter rows. Fix: search by
-  (patient, period.start, type) before POSTing.
-- [ ] **Silent Langfuse exception handlers** in `agents/briefing.py:154,
-  308, 343` — should `log.debug(...)` so trace failures aren't invisible.
-- [ ] **Tool registry catches all errors with no log** in
-  `tools/registry.py:78` — wrap with `log.warning("tool.failed", ...)`
-  so stack traces aren't lost.
-- [ ] **Formatter silently drops unknown section kinds** in
-  `agents/formatter.py:305` — currently filters `None` out of the section
-  list, so a new LLM-emitted kind vanishes. Either add a fallback shape
-  or `log.warning`.
+- [ ] **Practitioner count includes OpenMRS demo providers** — after the
+  orphan dedup, `Practitioner?_summary=count` is 42 (30 CHWs + 12 distro
+  demo providers). Harmless — the agent only uses the 30 in `id_map` — but a
+  clean `docker compose down -v && up` would drop the demo 12.
 - [ ] **MySQL → MariaDB alignment** — upstream OpenMRS distro 3.x uses
   `mariadb:10.11.7`, we use `mysql:8.0`. Drop the
   `--log_bin_trust_function_creators=1` workaround if we switch.
@@ -96,27 +86,32 @@ plus the cross-cutting things that don't slot neatly into a phase.
 
 ## Data / infra state to be aware of
 
-- [ ] **Synthea data was reloaded on 2026-05-24** — patient count is 681
-  (581 Synthea + 100 OpenMRS demo) and encounter count is ~9952 (some
-  residue from prior partial loads). Backend works fine since it filters
-  by id_map, but a clean `docker compose down -v && up` would normalise
-  this if it ever matters for a demo recording.
+- **Reseeded 2026-06-08 — now idempotent and current-dated.** OpenMRS holds
+  631 patients (581 tracked in `id_map` + 50 demo), 42 practitioners (30 CHWs
+  + 12 demo), 5,925 encounters (4,649 CHW + demo residue). The loader rebases
+  CHW encounters so the newest visit lands on **today** — activity now spans
+  **14 May → 8 Jun 2026**, which is what keeps the "last 7/30 days" tools and
+  the activity chart non-empty. Re-running the loader is safe: practitioners
+  are searched by identifier before POST and encounters by (patient, start),
+  so no more doubling or orphan providers. (commits 9c30f00, 51f7a69)
 
-## Recently shipped (for context — last 24h)
+## Recently shipped (for context)
 
+- [x] `fix(data)`: idempotent current-date reseed — `rebase_encounter_dates()`
+  shifts CHW visits so the newest lands on today; `post_practitioners()` now
+  checks identifier-before-POST; smoke test samples by participant instead of
+  the demo-polluted global feed; retired 36 orphan practitioners. (9c30f00,
+  51f7a69)
+- [x] `feat(data)`: encounter idempotency — search by (patient, period.start)
+  before POST so a reload no longer doubles rows. (46ff66b)
+- [x] `feat(frontend)`: CHW detail drawer + `GET /chw/{id}` endpoint. (1d42d47,
+  7422b4b)
+- [x] `feat(frontend)`: conversation persistence to localStorage. (ac7fbc6)
+- [x] `fix(agents/tools)`: surfaced three swallowed exception paths — tool
+  errors, Langfuse span-update failures, and unknown formatter section kinds
+  now log instead of vanishing silently. (779538f, 723eab9, 26f75f1)
 - [x] `feat`: SSE `/briefing/stream` end-to-end — backend emits
   `tool_start` / `tool_done` / `response` (with trace_id + answer_doc),
   frontend EventSource wired so plan timeline ticks live.
-- [x] `fix(frontend)`: `BACKEND_URL` default 8001→8000; split `HealthResponse`
-  into `LivenessResponse` + `ReadinessResponse` matching the backend, plus
-  a `getReady()` function that doesn't throw on 503.
-- [x] `feat(frontend)`: vitest + @testing-library scaffold, 9 tests covering
-  postBriefing / getHealth / getReady.
 - [x] Phase 5 observability — `/metrics`, request/tool/LLM histograms,
-  Grafana dashboard, Prometheus scrape target.
-- [x] `/healthz` (liveness) vs `/readyz` (downstream checks) split.
-- [x] `fix(llm)`: disabled openai SDK internal retries, then collapsed
-  the tenacity wrapper because the SDK already does it natively.
-- [x] `fix(infra)`: OpenMRS docker healthcheck endpoint corrected from
-  the 404 `/openmrs/health` to `/openmrs/` (matches upstream distro).
-- [x] Repo-level Dockerfile + `.dockerignore` for containerised testing.
+  Grafana dashboard, Prometheus scrape target; `/healthz` vs `/readyz` split.

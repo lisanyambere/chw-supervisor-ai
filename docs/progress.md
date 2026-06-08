@@ -44,8 +44,13 @@ agent has something real to reason over.
 - `Encounter.type[].coding[].code` must be the **UUID** of an existing
   `EncounterType` ("Visit Note").
 
-**Result:** **581 patients · 30 CHWs · 4,649 encounters** loaded, spanning
-**6 Apr → 1 May 2026**. See `docs/data-loading.md` for operational details.
+**Result:** **581 patients · 30 CHWs · 4,649 encounters** loaded. The loader
+rebases CHW encounter dates on each run so the newest visit lands on **today**
+(as of the 2026-06-08 reseed the window is **14 May → 8 Jun 2026**), keeping the
+agent's "last N days" tools and the activity chart non-empty. Reseeds are
+idempotent — practitioners are searched by identifier before POST and encounters
+by (patient, period.start), so a re-run no longer doubles rows or spawns orphan
+providers. See `docs/data-loading.md` for operational details.
 
 ---
 
@@ -253,6 +258,7 @@ rubric is calibrated, not just a thumbs-up generator. All 7 scores are
 posted to Langfuse per trace via `lf.create_score(trace_id=...)`.
 
 **Tests:** 55/55 passing (43 prior + 12 new in `test_evaluator_judges.py`).
+*(Suite has since grown to **89/89** — see Phase 4/5.)*
 
 ---
 
@@ -300,19 +306,28 @@ backend-measured ms timings and the structured answer with grounded
 `chw-NNN` chips. Every answer card carries a `trace · {short_id} ↗` link
 to the Langfuse trace it came from.
 
-### Next (Phase 4 continuation)
+### Shipped since
 
-- **CHW detail drawer** — right-side `Sheet`, opened by any `chw-NNN` chip
-  or `.ranked__row`. Pulls `count_chw_encounters` + `chw_patient_panel`
-  for the selected CHW.
+- ✅ **SSE streaming** — `/briefing/stream` emits `tool_start` / `tool_done` /
+  `response` (with `trace_id` + `answer_doc`); the frontend EventSource ticks
+  the plan timeline live and swaps in the structured answer on the final frame.
+- ✅ **Conversation persistence** — the reducer is mirrored to localStorage;
+  only completed AI turns rehydrate, so a mid-run reload can't resurrect a
+  stuck spinner.
+- ✅ **CHW detail drawer** — a right-side drawer opens from any `chw-NNN` chip
+  or ranked row, backed by a new `GET /chw/{id}` endpoint that fans out to
+  `count_chw_encounters` + `chw_patient_panel`.
+- ✅ **Backend test suite → 89/89** — added coverage for the SSE stream, the
+  typed formatter, `/healthz`/`/readyz`, Prometheus metrics, patient tools,
+  and tool-call metrics.
+
+### Still open
+
 - **Activity charts view** — 30-bar daily encounter chart with weekend
-  tinting and red zero-day bars; first non-conversational view.
+  tinting and red zero-day bars; first non-conversational view. *(in progress)*
 - **CHW roster view** — full 30-row reuse of the ranked-row pattern.
-- **SSE streaming** — replace the placeholder thinking row with a real
-  `/briefing/stream` endpoint that emits `tool_start` / `tool_done` /
-  `response` events so the plan timeline ticks live.
-- **Persistence** — drop the conversation reducer into a small KV store
-  (Postgres or just localStorage to start) so reloads don't wipe history.
+- **Component tests** — vitest + api-client tests exist; the Composer busy
+  state and the error-fallback UI are still uncovered.
 
 ## Phase 5 — Observability (done)
 
