@@ -25,6 +25,7 @@ import base64
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -279,6 +280,40 @@ def collect_chw_resources(chw_dir: Path):
     return practitioners, encounters
 
 
+# Parse a FHIR dateTime, tolerating a trailing Z.
+def _parse_dt(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+# Shift a FHIR dateTime string by a whole-day delta, preserving offset/format.
+def _shift_dt(value: str, shift: timedelta) -> str:
+    return (_parse_dt(value) + shift).isoformat()
+
+
+# Rebase every encounter so the most recent visit lands on today. The demo
+# fixtures are frozen at a fixed week, but the agent tools query relative to
+# the real clock; without this they see no recent activity. A whole-day shift
+# keeps weekday alignment intact. Returns the applied offset in days.
+def rebase_encounter_dates(encounters: list) -> int:
+    starts = [
+        s for e in encounters
+        if (s := (e.get("period") or {}).get("start"))
+    ]
+    if not starts:
+        return 0
+    newest = max(_parse_dt(s) for s in starts)
+    offset_days = (datetime.now(tz=timezone.utc).date() - newest.date()).days
+    if offset_days <= 0:
+        return 0
+    shift = timedelta(days=offset_days)
+    for e in encounters:
+        period = e.get("period") or {}
+        for key in ("start", "end"):
+            if period.get(key):
+                period[key] = _shift_dt(period[key], shift)
+    return offset_days
+
+
 # ---------------------------------------------------------------------------
 # Phases
 # ---------------------------------------------------------------------------
@@ -431,27 +466,40 @@ def post_practitioners(practitioners: list) -> dict:
     mapping: dict = {}
     failures: list = []
 
-    def task(p):
+    def task(p) -> tuple[str, str | None, str, bool]:
+        # Returns (chw_id, server_uuid, error, was_reused).
         chw_id, shaped = shape_practitioner(dict(p))
+        # Check-before-post. OpenMRS does NOT enforce Provider identifier
+        # uniqueness, so a bare re-POST silently creates a duplicate Provider
+        # with a fresh UUID (the "already in use" branch below never fires for
+        # Practitioners). Searching by identifier first and reusing the hit is
+        # what actually makes a reseed idempotent — without it the
+        # Practitioner table grows by ~30 orphans every run.
+        existing = fhir_search_first_id("Practitioner", {"identifier": chw_id})
+        if existing:
+            return chw_id, existing, "", True
         ok, body, err = fhir_post("Practitioner", shaped)
         if ok and body:
-            return chw_id, body.get("id"), ""
+            return chw_id, body.get("id"), "", False
         if "already in use" in err or "duplicate" in err.lower():
             existing = fhir_search_first_id("Practitioner", {"identifier": chw_id})
             if existing:
-                return chw_id, existing, ""
-        return chw_id, None, err
+                return chw_id, existing, "", False
+        return chw_id, None, err, False
 
     print(f"  POST Practitioner x {len(practitioners)}")
+    reused = 0
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:
         futures = [ex.submit(task, p) for p in practitioners]
         for fut in as_completed(futures):
-            chw_id, server_uuid, err = fut.result()
+            chw_id, server_uuid, err, was_reused = fut.result()
             if server_uuid:
                 mapping[chw_id] = server_uuid
+                if was_reused:
+                    reused += 1
             else:
                 failures.append((chw_id, err))
-    print(f"    ok={len(mapping)} fail={len(failures)}")
+    print(f"    ok={len(mapping)} (reused={reused}, new={len(mapping) - reused}) fail={len(failures)}")
     if failures:
         print(f"    Sample failure: {failures[0]}")
     return mapping
@@ -563,29 +611,53 @@ def smoke_test(patient_map: dict, chw_map: dict) -> bool:
         total = data.get("total", "?") if data else "ERROR"
         print(f"  {label}: {total}")
 
-    # 1. Participants must survive round-trip. Sample 20 encounters; if <50%
-    #    carry a participant block, the participant references were silently
-    #    scrubbed (typically because of stale practitioner UUIDs).
-    page = _fhir_get(f"{FHIR_BASE}/Encounter?_count=20")
-    entries = (page or {}).get("entry") or []
-    if not entries:
-        print("  Participant round-trip: SKIP (no encounters to sample)")
+    # 1. Participants must survive round-trip. The global Encounter feed is
+    #    polluted with demo-patient encounters that legitimately carry no CHW
+    #    participant, so an unfiltered sample reports false stripping. Sample
+    #    by a known practitioner instead: a zero-result count means the links
+    #    were scrubbed on persistence (stale practitioner UUIDs) — a hard
+    #    fail, not a skip — and every returned encounter must echo a
+    #    participant block.
+    sample_chw = next(iter(chw_map.values()), None)
+    if sample_chw is None:
+        print("  Participant round-trip: SKIP (no practitioners in chw_map)")
     else:
-        with_part = sum(
-            1 for e in entries if (e.get("resource") or {}).get("participant")
+        count_doc = _fhir_get(
+            f"{FHIR_BASE}/Encounter?participant={sample_chw}&_summary=count"
         )
-        pct = (with_part / len(entries)) * 100
-        verdict = "OK" if pct >= 50 else "FAIL"
-        print(
-            f"  Participant round-trip: {with_part}/{len(entries)} ({pct:.0f}%) {verdict}"
+        linked = int((count_doc or {}).get("total", 0))
+        page = _fhir_get(
+            f"{FHIR_BASE}/Encounter?participant={sample_chw}&_count=20"
         )
-        if pct < 50:
+        entries = (page or {}).get("entry") or []
+        if linked == 0 or not entries:
+            print(
+                f"  Participant round-trip: 0 encounters link to sample "
+                f"practitioner {sample_chw} FAIL"
+            )
             print(
                 "    Participants were stripped on persistence. "
                 "Almost always caused by stale practitioner UUIDs in the "
                 "encounter payload. Inspect chw_map vs live Practitioners."
             )
             passed = False
+        else:
+            with_part = sum(
+                1 for e in entries if (e.get("resource") or {}).get("participant")
+            )
+            pct = (with_part / len(entries)) * 100
+            verdict = "OK" if pct >= 50 else "FAIL"
+            print(
+                f"  Participant round-trip: {with_part}/{len(entries)} "
+                f"({pct:.0f}%) of {linked} linked {verdict}"
+            )
+            if pct < 50:
+                print(
+                    "    Participants were stripped on persistence. "
+                    "Almost always caused by stale practitioner UUIDs in the "
+                    "encounter payload. Inspect chw_map vs live Practitioners."
+                )
+                passed = False
 
     # 2. id_map UUIDs must resolve. Every practitioner uuid is checked; a
     #    20-patient sample suffices to catch wholesale drift.
@@ -644,6 +716,8 @@ def main() -> None:
 
     print("\nPhase 2 - CHW Practitioners")
     practitioners, encounters = collect_chw_resources(chw_dir)
+    offset = rebase_encounter_dates(encounters)
+    print(f"  Rebased encounter dates by +{offset} days (newest visit -> today)")
     chw_map = post_practitioners(practitioners)
 
     print("\nPhase 3 - CHW Encounters")
