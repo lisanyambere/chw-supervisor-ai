@@ -84,6 +84,36 @@ async def test_search_respects_max_pages() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_search_stops_when_stop_after_page_returns_true() -> None:
+    # Two pages are available, but the predicate halts after the first based on
+    # that page's own resources — the second page is never fetched.
+    page1 = {
+        "resourceType": "Bundle",
+        "type": "searchset",
+        "entry": [{"resource": {"id": "a", "done": True}}],
+        "link": [{"relation": "next", "url": f"{BASE}/Encounter?_getpages=PAGE2"}],
+    }
+    route = respx.get(f"{BASE}/Encounter")
+    route.mock(return_value=httpx.Response(200, json=page1))
+
+    seen_pages: list[int] = []
+
+    def _stop(resources: list[dict]) -> bool:
+        seen_pages.append(len(resources))
+        return any(r.get("done") for r in resources)
+
+    async with _client() as fhir:
+        rows = await fhir.search(
+            "Encounter", max_pages=5, stop_after_page=_stop
+        )
+
+    assert [r["id"] for r in rows] == ["a"]
+    assert route.call_count == 1  # halted before fetching page 2
+    assert seen_pages == [1]  # predicate evaluated against the first page only
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_read_returns_resource() -> None:
     respx.get(f"{BASE}/Patient/uuid-1").mock(
         return_value=httpx.Response(

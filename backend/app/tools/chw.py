@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -340,6 +341,31 @@ async def chw_patient_panel(
 # Activity series (UI charts) — not a tool; consumed by GET /activity.
 # ---------------------------------------------------------------------------
 
+# OpenMRS FHIR Encounter search costs ~10s per call regardless of result size,
+# so a team-wide series (one call per CHW) must neither hammer OpenMRS with
+# 30-way concurrency nor recompute on every page view. We bound concurrency
+# with a semaphore and memoize results for a short TTL — the demo fixtures are
+# static between reseeds, so this is safe and makes the chart feel instant.
+_ACTIVITY_TTL_SECONDS = 300.0
+_ACTIVITY_MAX_CONCURRENCY = 8
+_ActivityKey = tuple[int, str | None]
+_activity_cache: dict[_ActivityKey, tuple[float, dict[str, Any]]] = {}
+_activity_inflight: dict[_ActivityKey, asyncio.Task[dict[str, Any]]] = {}
+_fhir_search_sema: asyncio.Semaphore | None = None
+
+
+def _get_fhir_sema() -> asyncio.Semaphore:
+    # Created lazily so it binds to the running event loop, not import time.
+    global _fhir_search_sema
+    if _fhir_search_sema is None:
+        _fhir_search_sema = asyncio.Semaphore(_ACTIVITY_MAX_CONCURRENCY)
+    return _fhir_search_sema
+
+
+def clear_activity_cache() -> None:
+    """Drop memoized activity series. Call after a reseed (tests, tooling)."""
+    _activity_cache.clear()
+
 
 async def activity_series(
     client: FhirClient, days: int = 30, chw_id: str | None = None
@@ -349,11 +375,18 @@ async def activity_series(
     Scoped strictly to the CHW practitioners in the id_map (team-wide or one
     CHW), so the chart reflects fieldwork only — not the OpenMRS demo patients.
 
-    We fetch each CHW's in-window encounters once (in parallel) and bucket them
-    by their **start date** rather than firing a per-day `_summary=count`. That
-    is deliberate: OpenMRS's Encounter `date` search matches on period *overlap*,
-    which double-counts an encounter across adjacent days and would mask true
-    zero-days — exactly the signal this chart exists to surface.
+    We fetch each CHW's in-window encounters once and bucket them by their
+    **start date** rather than firing a per-day `_summary=count`. That is
+    deliberate: a per-day windowed count double-counts encounters that straddle
+    a day boundary and masks true zero-days — exactly the signal this chart
+    exists to surface. `date=ge{since}` filters accurately, so each CHW is
+    typically a single page; `_sort=-date` plus the early-stop only matter for
+    the largest (90-day) windows.
+
+    Performance: OpenMRS is the bottleneck (~10s/call), so team-wide fans the
+    per-CHW calls out under a concurrency cap, memoizes the result for
+    `_ACTIVITY_TTL_SECONDS`, and coalesces concurrent cold computes for the same
+    window (e.g. a startup warm racing the first page view) onto one task.
     """
     idmap = get_id_map()
     if chw_id is not None:
@@ -364,16 +397,58 @@ async def activity_series(
     else:
         uuids = idmap.chw_uuids
 
+    cache_key: _ActivityKey = (days, chw_id)
+    cached = _activity_cache.get(cache_key)
+    if cached is not None and time.monotonic() - cached[0] < _ACTIVITY_TTL_SECONDS:
+        return cached[1]
+
+    # Coalesce concurrent cold computes for the same window onto a single task.
+    existing = _activity_inflight.get(cache_key)
+    if existing is not None:
+        return await existing
+
+    task = asyncio.ensure_future(_compute_activity(client, days, chw_id, uuids))
+    _activity_inflight[cache_key] = task
+    try:
+        result = await task
+    finally:
+        _activity_inflight.pop(cache_key, None)
+    _activity_cache[cache_key] = (time.monotonic(), result)
+    return result
+
+
+async def _compute_activity(
+    client: FhirClient, days: int, chw_id: str | None, uuids: list[str]
+) -> dict[str, Any]:
+    """The actual fan-out + bucket. Split out so `activity_series` can wrap it
+    in cache + in-flight coalescing without duplicating the work."""
     today = datetime.now(tz=UTC).date()
     day_dates = [today - timedelta(days=i) for i in range(days - 1, -1, -1)]
     since = day_dates[0].isoformat()
 
-    async def _starts_for(u: str) -> list[str]:
-        rows = await client.search(
-            "Encounter",
-            params={"participant": u, "date": f"ge{since}", "_count": 200},
-            max_pages=6,
+    def _page_all_before_window(resources: list[dict[str, Any]]) -> bool:
+        # With _sort=-date the newest encounters arrive first. Once a whole
+        # page sits before `since`, every later page is older still — stop.
+        return not any(
+            ((r.get("period") or {}).get("start") or "")[:10] >= since
+            for r in resources
         )
+
+    sema = _get_fhir_sema()
+
+    async def _starts_for(u: str) -> list[str]:
+        async with sema:
+            rows = await client.search(
+                "Encounter",
+                params={
+                    "participant": u,
+                    "date": f"ge{since}",
+                    "_sort": "-date",
+                    "_count": 200,
+                },
+                max_pages=8,
+                stop_after_page=_page_all_before_window,
+            )
         return [((r.get("period") or {}).get("start") or "")[:10] for r in rows]
 
     per_chw = (

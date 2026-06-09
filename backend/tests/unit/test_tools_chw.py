@@ -32,7 +32,12 @@ class FakeFhir:
         return self.reads.get((rtype, rid), {})
 
     async def search(
-        self, rtype: str, params: dict[str, Any] | None = None, *, max_pages: int = 5
+        self,
+        rtype: str,
+        params: dict[str, Any] | None = None,
+        *,
+        max_pages: int = 5,
+        stop_after_page: Any = None,
     ) -> list[dict]:
         key = (rtype, frozenset((params or {}).items()))
         self.calls.append(("search", rtype, params or {}))
@@ -47,6 +52,9 @@ def _patch_id_map(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(chw_tools, "get_id_map", lambda: fake)
     monkeypatch.setattr(patient_tools, "_format_codeable", patient_tools._format_codeable)
+    # The activity series memoizes by (days, chw_id) at module scope; clear it
+    # so each test sees its own fake data rather than a prior test's cache.
+    chw_tools.clear_activity_cache()
 
 
 async def test_list_chws_returns_sorted() -> None:
@@ -212,3 +220,67 @@ async def test_chw_patient_panel_respects_limit() -> None:
 async def test_chw_patient_panel_unknown_chw() -> None:
     out = await chw_tools.chw_patient_panel(FakeFhir(), chw_id="nope")  # type: ignore[arg-type]
     assert "error" in out
+
+
+# ─── activity_series (UI charts) ──────────────────────────────────────
+
+
+async def test_activity_series_buckets_by_start_date() -> None:
+    # chw-001 worked two of the three days; chw-002 worked one. The middle day
+    # has zero encounters team-wide and must surface as a zero-day.
+    today = chw_tools.datetime.now(tz=chw_tools.UTC).date()
+    d0 = (today - chw_tools.timedelta(days=2)).isoformat()  # oldest
+    d2 = today.isoformat()  # newest
+
+    per_participant = {
+        "uuid-chw-1": [
+            {"period": {"start": f"{d0}T08:00:00Z"}},
+            {"period": {"start": f"{d0}T11:00:00Z"}},
+            {"period": {"start": f"{d2}T09:00:00Z"}},
+        ],
+        "uuid-chw-2": [
+            {"period": {"start": f"{d2}T10:00:00Z"}},
+        ],
+    }
+
+    async def fake_search(rtype, params=None, *, max_pages=8, stop_after_page=None):  # type: ignore[no-untyped-def]
+        assert rtype == "Encounter"
+        assert params["_sort"] == "-date"
+        return per_participant.get(params["participant"], [])
+
+    fhir = FakeFhir()
+    fhir.search = fake_search  # type: ignore[assignment]
+
+    out = await chw_tools.activity_series(fhir, days=3)  # type: ignore[arg-type]
+    assert [s["encounter_count"] for s in out["series"]] == [2, 0, 2]
+    assert out["series"][1]["is_zero"] is True
+    assert out["stats"]["total"] == 4
+    assert out["stats"]["zero_days"] == 1
+    assert out["stats"]["active_days"] == 2
+    # Each day carries a weekday label and weekend flag.
+    assert all(s["weekday"] for s in out["series"])
+
+
+async def test_activity_series_unknown_chw() -> None:
+    out = await chw_tools.activity_series(FakeFhir(), days=7, chw_id="nope")  # type: ignore[arg-type]
+    assert "error" in out
+
+
+async def test_activity_series_memoizes_result() -> None:
+    calls = {"n": 0}
+
+    async def fake_search(rtype, params=None, *, max_pages=8, stop_after_page=None):  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        return []
+
+    fhir = FakeFhir()
+    fhir.search = fake_search  # type: ignore[assignment]
+
+    first = await chw_tools.activity_series(fhir, days=5, chw_id="chw-001")  # type: ignore[arg-type]
+    after_first = calls["n"]
+    assert after_first > 0
+    second = await chw_tools.activity_series(fhir, days=5, chw_id="chw-001")  # type: ignore[arg-type]
+    # The second call is served from cache — no further FHIR searches.
+    assert calls["n"] == after_first
+    assert second is first
+

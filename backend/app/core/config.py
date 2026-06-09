@@ -85,6 +85,13 @@ class Settings(BaseSettings):
         default=30, alias="BRIEFING_DEFAULT_LOOKBACK_DAYS", ge=1, le=365
     )
 
+    # Warm the activity chart's default window at startup. Team-wide activity
+    # is OpenMRS-bound (~3min cold) but static, so warming makes the first
+    # chart view instant. Disabled in tests so they don't touch OpenMRS.
+    activity_warm_on_startup: bool = Field(
+        default=True, alias="ACTIVITY_WARM_ON_STARTUP"
+    )
+
     # ── LLM retry ────────────────────────────────────────────────────────
     # The openai SDK does its own exponential backoff and Retry-After handling;
     # we just configure how many attempts it makes (attempts = retries + 1).

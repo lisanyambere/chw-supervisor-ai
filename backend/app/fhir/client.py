@@ -1,6 +1,7 @@
 """Async FHIR R4 client for OpenMRS."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -80,10 +81,21 @@ class FhirClient:
         params: dict[str, Any] | None = None,
         *,
         max_pages: int = 5,
+        stop_after_page: Callable[[list[dict]], bool] | None = None,
     ) -> list[dict]:
-        """Return concatenated `entry[].resource` lists across paginated bundles."""
+        """Return concatenated `entry[].resource` lists across paginated bundles.
+
+        `stop_after_page` is an optional predicate evaluated against *each
+        page's own* resources right after it's fetched. Returning True halts
+        pagination — handy when results are sorted (e.g. `_sort=-date`) and the
+        caller can tell it has already seen everything it needs, sparing slow
+        round-trips through the rest of a resource's history.
+        """
         page = await self._get(f"/{resource_type}", params=params)
-        out: list[dict] = [e["resource"] for e in (page.get("entry") or [])]
+        page_resources = [e["resource"] for e in (page.get("entry") or [])]
+        out: list[dict] = list(page_resources)
+        if stop_after_page is not None and stop_after_page(page_resources):
+            return out
 
         pages_fetched = 1
         while pages_fetched < max_pages:
@@ -93,8 +105,11 @@ class FhirClient:
             # OpenMRS returns absolute URLs; strip prefix if it matches base.
             path = _to_relative(next_url, self._base_url)
             page = await self._get(path)
-            out.extend(e["resource"] for e in (page.get("entry") or []))
+            page_resources = [e["resource"] for e in (page.get("entry") or [])]
+            out.extend(page_resources)
             pages_fetched += 1
+            if stop_after_page is not None and stop_after_page(page_resources):
+                break
 
         return out
 

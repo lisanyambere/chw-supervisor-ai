@@ -53,10 +53,34 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except RuntimeError as e:
         log.warning("llm.unconfigured", error=str(e))
     get_langfuse()  # initialize tracing if keys present
+
+    # Prime the activity chart's default window in the background. The
+    # team-wide series is OpenMRS-bound (~3min cold) but the fixtures are
+    # static, so warming it at boot means the first chart view is instant.
+    # Fire-and-forget: a failure (or OpenMRS being down) must not block startup.
+    async def _warm_activity() -> None:
+        try:
+            data = await activity_series(app.state.fhir, days=30, chw_id=None)
+            log.info("activity.warm_complete", total=data["stats"]["total"])
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            log.warning("activity.warm_failed", error=str(e))
+
+    warm_task = (
+        asyncio.create_task(_warm_activity())
+        if s.activity_warm_on_startup
+        else None
+    )
+
     log.info("api.startup")
     try:
         yield
     finally:
+        if warm_task is not None:
+            warm_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await warm_task
         await app.state.fhir.aclose()
         await langfuse_flush()
         log.info("api.shutdown")
