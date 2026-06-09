@@ -532,3 +532,182 @@ html, body {
   to   { transform: translateX(0); opacity: 1; }
 }
 
+/* ─── activity charts view ───────────────────────────────────────────── */
+.activity {
+  padding: 28px 32px 48px;
+  max-width: 940px;
+}
+.activity__head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.activity__title {
+  font-size: 24px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--ink);
+}
+.activity__sub {
+  font-size: 13px; color: var(--ink-3);
+  margin-top: 4px;
+}
+.activity__controls {
+  display: flex; align-items: center; gap: 10px;
+}
+
+/* CHW selector (native select + overlaid chevron) */
+.activity-select-wrap { position: relative; display: inline-flex; }
+.activity-select {
+  appearance: none;
+  height: 34px;
+  padding: 0 30px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+.activity-select:hover { border-color: var(--line-2); }
+.activity-select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 16%, transparent);
+}
+.activity-select-chevron {
+  position: absolute; right: 10px; top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--ink-4);
+}
+
+/* Segmented look-back control */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.seg button {
+  height: 34px; padding: 0 13px;
+  font-size: 13px; font-weight: 500;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 0;
+  border-left: 1px solid var(--line);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.seg button:first-child { border-left: 0; }
+.seg button:hover { background: var(--surface-2); }
+.seg button.is-active {
+  background: var(--accent-2);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.activity-stats { margin-bottom: 16px; }
+
+/* Chart card */
+.activity-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 20px 22px;
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.03);
+}
+.activity-card__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.activity-card__title { font-size: 14px; font-weight: 600; color: var(--ink); }
+.activity-card__period { font-size: 12px; color: var(--ink-3); }
+
+/* Bars */
+.chart {
+  display: flex; align-items: flex-end; gap: 4px;
+  height: 184px;
+  border-bottom: 1px solid var(--line);
+}
+.chart-col {
+  flex: 1 1 0; min-width: 0;
+  height: 100%;
+  display: flex; align-items: flex-end;
+  border-radius: 4px 4px 0 0;
+  transition: background 120ms ease;
+}
+.chart-col--weekend { background: var(--surface-2); }
+.chart-col:hover { background: color-mix(in oklch, var(--accent) 8%, transparent); }
+.chart-fill {
+  width: 100%;
+  min-height: 2px;
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+  transition: height 220ms ease, background 120ms ease;
+}
+.chart-col:hover .chart-fill { background: var(--accent-strong); }
+/* Zero-activity days: a red baseline tick — impossible to miss, and the whole
+   reason the chart buckets by start date instead of trusting overlap counts. */
+.chart-col--zero .chart-fill {
+  height: 3px;
+  background: var(--alert);
+  border-radius: 2px;
+  opacity: 0.9;
+}
+.chart-col--zero:hover .chart-fill { background: var(--alert); opacity: 1; }
+.chart-fill--skel {
+  background: var(--surface-2);
+  animation: skel-pulse 1.4s ease-in-out infinite;
+}
+
+/* X-axis ticks — aligned 1:1 with bars; only weekly markers carry text. */
+.chart-axis {
+  display: flex; gap: 4px;
+  margin-top: 7px;
+}
+.chart-axis__tick {
+  flex: 1 1 0; min-width: 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+
+.chart-legend {
+  display: flex; gap: 18px; flex-wrap: wrap;
+  margin-top: 16px;
+  font-size: 12px; color: var(--ink-3);
+}
+.chart-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend__swatch {
+  width: 10px; height: 10px; border-radius: 3px;
+  border: 1px solid color-mix(in oklch, var(--ink) 8%, transparent);
+}
+
+.activity-error {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklch, var(--alert) 30%, var(--line));
+  background: var(--alert-bg);
+  color: var(--alert);
+  font-size: 13px;
+}
+
+/* Skeleton primitives (loading state) */
+.skel {
+  background: var(--surface-2);
+  border-radius: 6px;
+  animation: skel-pulse 1.4s ease-in-out infinite;
+}
+.skel--label { height: 12px; width: 60%; }
+.skel--value { height: 26px; width: 40%; margin-top: 10px; }
+.skel--sub   { height: 11px; width: 50%; margin-top: 10px; }
+.skel--title { height: 14px; width: 160px; }
+@keyframes skel-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+

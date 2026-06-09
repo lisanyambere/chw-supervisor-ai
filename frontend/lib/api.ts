@@ -116,6 +116,70 @@ export async function getChwDetail(
   return (await res.json()) as ChwDetail;
 }
 
+// ─── /chws (roster) + /activity (daily series) ──────────────────────────────
+
+export type ChwRosterEntry = {
+  chw_id: string;
+  practitioner_uuid: string;
+};
+
+export type ActivityDay = {
+  date: string; // ISO yyyy-mm-dd
+  weekday: string; // "Mon".."Sun"
+  encounter_count: number;
+  is_weekend: boolean;
+  is_zero: boolean;
+};
+
+export type ActivityStats = {
+  min: number;
+  max: number;
+  mean: number;
+  total: number;
+  zero_days: number;
+  active_days: number;
+};
+
+export type ActivityResponse = {
+  days: number;
+  chw_id: string | null;
+  series: ActivityDay[];
+  stats: ActivityStats;
+};
+
+/** CHW roster straight from the id_map — powers the activity-chart selector. */
+export async function getChws(
+  opts: { signal?: AbortSignal } = {},
+): Promise<ChwRosterEntry[]> {
+  const res = await fetch(`${BACKEND_URL}/chws`, { signal: opts.signal });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`chws failed: ${res.status} ${detail.slice(0, 200)}`);
+  }
+  return (await res.json()) as ChwRosterEntry[];
+}
+
+/**
+ * Daily CHW encounter counts. Team-wide by default; pass `chwId` to scope to
+ * one CHW. The backend caps `days` at 90 and 404s on an unknown chw id.
+ */
+export async function getActivity(
+  opts: { days?: number; chwId?: string | null; signal?: AbortSignal } = {},
+): Promise<ActivityResponse> {
+  const params = new URLSearchParams();
+  if (opts.days !== undefined) params.set("days", String(opts.days));
+  if (opts.chwId) params.set("chw_id", opts.chwId);
+  const qs = params.toString();
+  const res = await fetch(`${BACKEND_URL}/activity${qs ? `?${qs}` : ""}`, {
+    signal: opts.signal,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`activity failed: ${res.status} ${detail.slice(0, 200)}`);
+  }
+  return (await res.json()) as ActivityResponse;
+}
+
 // ─── /healthz (liveness) ────────────────────────────────────────────────────
 
 export type LivenessResponse = {

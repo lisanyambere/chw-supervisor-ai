@@ -7,6 +7,7 @@ import { Hero } from "@/components/Hero";
 import { Composer } from "@/components/Composer";
 import { AiTurn, UserTurn, type Turn } from "@/components/Conversation";
 import { ChwDrawer } from "@/components/ChwDrawer";
+import { ActivityView } from "@/components/ActivityView";
 import { getReady, streamBriefing, type PlanStep } from "@/lib/api";
 
 const STORAGE_KEY = "cha:turns:v1";
@@ -252,6 +253,9 @@ export default function HomePage() {
   }
 
   const isEmpty = turns.length === 0;
+  // The activity charts live outside the conversational flow — they get the
+  // full canvas and don't show the briefing composer.
+  const showChart = nav === "chart";
 
   return (
     <div
@@ -262,7 +266,9 @@ export default function HomePage() {
       <div className="flex flex-col overflow-hidden">
         <Topbar breadcrumb={`workspace / ${navLabel(nav)}`} />
         <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
-          {isEmpty ? (
+          {showChart ? (
+            <ActivityView />
+          ) : isEmpty ? (
             <Hero onAsk={ask} />
           ) : (
             <div className="pb-4">
@@ -276,14 +282,16 @@ export default function HomePage() {
             </div>
           )}
         </div>
-        <Composer
-          busy={busy}
-          onSubmit={ask}
-          disabled={backendStatus !== "ready"}
-          disabledReason={
-            backendStatus === "checking" ? "Checking backend..." : backendReason
-          }
-        />
+        {!showChart && (
+          <Composer
+            busy={busy}
+            onSubmit={ask}
+            disabled={backendStatus !== "ready"}
+            disabledReason={
+              backendStatus === "checking" ? "Checking backend..." : backendReason
+            }
+          />
+        )}
       </div>
       <ChwDrawer chwId={selectedChw} onClose={() => setSelectedChw(null)} />
     </div>

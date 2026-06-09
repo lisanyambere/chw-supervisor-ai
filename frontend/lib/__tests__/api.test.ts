@@ -1,12 +1,28 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { BACKEND_URL, getHealth, getReady, postBriefing } from "@/lib/api";
+import {
+  BACKEND_URL,
+  getActivity,
+  getChws,
+  getHealth,
+  getReady,
+  postBriefing,
+} from "@/lib/api";
 
 function mockFetch(response: Partial<Response>): void {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => response as Response),
   );
+}
+
+/** Like mockFetch, but returns the spy so tests can assert on the called URL. */
+function mockFetchSpy(response: Partial<Response>) {
+  const spy = vi.fn((..._args: unknown[]) =>
+    Promise.resolve(response as Response),
+  );
+  vi.stubGlobal("fetch", spy);
+  return spy;
 }
 
 afterEach(() => {
@@ -132,5 +148,79 @@ describe("getReady (readiness)", () => {
     });
 
     await expect(getReady()).rejects.toThrow(/500/);
+  });
+});
+
+describe("getChws (roster)", () => {
+  it("returns the parsed roster on 200", async () => {
+    const body = [
+      { chw_id: "chw-001", practitioner_uuid: "uuid-1" },
+      { chw_id: "chw-002", practitioner_uuid: "uuid-2" },
+    ];
+    mockFetch({ ok: true, status: 200, json: async () => body });
+
+    await expect(getChws()).resolves.toEqual(body);
+  });
+
+  it("throws on a non-2xx response", async () => {
+    mockFetch({ ok: false, status: 500, text: async () => "boom" });
+
+    await expect(getChws()).rejects.toThrow(/500/);
+  });
+});
+
+describe("getActivity (daily series)", () => {
+  const body = {
+    days: 30,
+    chw_id: null,
+    series: [
+      {
+        date: "2026-05-11",
+        weekday: "Mon",
+        encounter_count: 12,
+        is_weekend: false,
+        is_zero: false,
+      },
+    ],
+    stats: {
+      min: 0,
+      max: 12,
+      mean: 6.0,
+      total: 180,
+      zero_days: 4,
+      active_days: 26,
+    },
+  };
+
+  it("returns the parsed ActivityResponse on 200", async () => {
+    mockFetch({ ok: true, status: 200, json: async () => body });
+
+    await expect(getActivity({ days: 30 })).resolves.toEqual(body);
+  });
+
+  it("encodes days and chwId into the query string", async () => {
+    const spy = mockFetchSpy({ ok: true, status: 200, json: async () => body });
+
+    await getActivity({ days: 14, chwId: "chw-007" });
+
+    const url = String(spy.mock.calls[0][0]);
+    expect(url).toContain("/activity?");
+    expect(url).toContain("days=14");
+    expect(url).toContain("chw_id=chw-007");
+  });
+
+  it("omits chw_id when scoped to the whole team", async () => {
+    const spy = mockFetchSpy({ ok: true, status: 200, json: async () => body });
+
+    await getActivity({ days: 30, chwId: null });
+
+    const url = String(spy.mock.calls[0][0]);
+    expect(url).not.toContain("chw_id");
+  });
+
+  it("surfaces a 404 for an unknown chw id", async () => {
+    mockFetch({ ok: false, status: 404, text: async () => "unknown chw_id" });
+
+    await expect(getActivity({ chwId: "chw-999" })).rejects.toThrow(/404/);
   });
 });
