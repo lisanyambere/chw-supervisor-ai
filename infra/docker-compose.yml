@@ -24,10 +24,13 @@ services:
       # even when FHIR was serving. /openmrs/ returns 200 as soon as the
       # webapp is deployed. Application-level FHIR readiness is checked
       # separately on the backend's /readyz.
+      # 10s probes detect restart readiness ~90s sooner than 30s did; the
+      # high retry count keeps first-boot Liquibase (10-15 min) from ever
+      # flipping the container to unhealthy.
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/openmrs/ || exit 1"]
-      interval: 30s
+      interval: 10s
       timeout: 10s
-      retries: 15
+      retries: 90
       start_period: 180s
 
   openmrs-frontend:
