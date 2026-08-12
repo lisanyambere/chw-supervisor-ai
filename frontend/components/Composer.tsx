@@ -33,7 +33,7 @@ export function Composer({
   }
 
   return (
-    <div className="max-w-[940px] mx-auto px-6 pb-6 sticky bottom-0" style={{ background: "var(--bg)" }}>
+    <div className="composer-dock max-w-[1040px] mx-auto px-8 pb-6 sticky bottom-0">
       <div className="composer">
         <div className="flex items-end gap-3">
           <textarea
@@ -65,7 +65,7 @@ export function Composer({
         </div>
         <div className="composer__hint">
           <span>↵ send · ⇧↵ newline</span>
-          <span>model: gpt-5.5 (azure)</span>
+          <span className="composer-model">gpt-5.5 · azure</span>
           <span>lookback: 30d</span>
           <span className="flex items-center gap-1.5">
             <span

@@ -36,28 +36,22 @@ export function Sidebar({
   onSelect: (id: NavId) => void;
 }) {
   return (
-    <aside
-      className="border-r border-[var(--line)] flex flex-col"
-      style={{ background: "var(--surface-2)" }}
-    >
+    <aside className="sidebar flex flex-col">
       {/* Brand block */}
-      <div className="px-4 pt-5 pb-4 flex items-center gap-2.5">
-        <div
-          className="w-[26px] h-[26px] rounded-md grid place-items-center text-[10px] font-mono font-semibold"
-          style={{ background: "var(--ink)", color: "var(--bg)" }}
-        >
-          CH
+      <div className="brand-block px-5 pt-6 pb-7 flex items-center gap-3">
+        <div className="brand-mark" aria-hidden="true">
+          <span>+</span>
         </div>
         <div className="leading-tight">
-          <div className="text-[13px] font-semibold">Field Briefing</div>
-          <div className="text-[11px] font-mono text-[var(--ink-3)]">kakamega · v0.3</div>
+          <div className="brand-name">Field Briefing</div>
+          <div className="brand-place">Kakamega County · 0.3</div>
         </div>
       </div>
 
       {/* Workspace nav */}
       <div className="px-3">
-        <div className="text-[10px] font-mono uppercase tracking-[0.07em] text-[var(--ink-4)] px-2 mb-2">
-          workspace
+        <div className="sidebar-label px-2 mb-2">
+          Field desk
         </div>
         <nav className="flex flex-col gap-0.5">
           {NAV.map((n) => (
@@ -66,7 +60,7 @@ export function Sidebar({
               onClick={() => onSelect(n.id)}
               className={cn("nav-item", active === n.id && "nav-item--active")}
             >
-              <span className="text-[var(--ink-3)]">{n.icon}</span>
+              <span className="nav-icon">{n.icon}</span>
               <span>{n.label}</span>
               {n.badge && (
                 <span className={cn("nav-badge", n.tone === "alert" && "nav-badge--alert")}>
@@ -80,8 +74,8 @@ export function Sidebar({
 
       {/* Observability */}
       <div className="px-3 mt-6">
-        <div className="text-[10px] font-mono uppercase tracking-[0.07em] text-[var(--ink-4)] px-2 mb-2">
-          observability
+        <div className="sidebar-label px-2 mb-2">
+          Systems
         </div>
         <nav className="flex flex-col gap-0.5">
           {OBS.map((o) => (
@@ -90,26 +84,23 @@ export function Sidebar({
               href={o.href}
               target="_blank"
               rel="noreferrer"
-              className="nav-item font-mono text-[12px] text-[var(--ink-2)]"
+              className="nav-item nav-item--external font-mono text-[11px]"
             >
               <span>{o.label}</span>
-              <ExternalLink size={11} className="ml-auto text-[var(--ink-4)]" />
+              <ExternalLink size={11} className="ml-auto" />
             </a>
           ))}
         </nav>
       </div>
 
       {/* User block */}
-      <div className="mt-auto px-4 py-4 border-t border-[var(--line)] flex items-center gap-2.5">
-        <div
-          className="w-7 h-7 rounded-full grid place-items-center text-[11px] font-mono font-semibold"
-          style={{ background: "var(--accent-2)", color: "var(--accent-ink)" }}
-        >
+      <div className="user-block mt-auto px-4 py-4 flex items-center gap-2.5">
+        <div className="user-avatar">
           MK
         </div>
         <div className="leading-tight">
-          <div className="text-[12px] font-medium">Margaret Kimani</div>
-          <div className="text-[11px] text-[var(--ink-3)]">Supervisor · Kakamega</div>
+          <div className="text-[13px] font-semibold">Margaret Kimani</div>
+          <div className="user-role">County supervisor</div>
         </div>
       </div>
     </aside>

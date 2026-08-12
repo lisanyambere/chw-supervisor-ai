@@ -213,14 +213,11 @@ export default function HomePage() {
   const isEmpty = turns.length === 0;
 
   return (
-    <div
-      className="grid h-screen"
-      style={{ gridTemplateColumns: "244px 1fr" }}
-    >
+    <div className="app-shell grid h-[100dvh]">
       <Sidebar active={nav} onSelect={setNav} />
-      <div className="flex flex-col overflow-hidden">
+      <div className="main-stage flex flex-col overflow-hidden">
         <Topbar breadcrumb={`workspace / ${navLabel(nav)}`} />
-        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
+        <main ref={scrollRef} onScroll={onScroll} className="content-scroll flex-1 overflow-y-auto">
           {isEmpty ? (
             <Hero onAsk={ask} />
           ) : (
@@ -234,7 +231,7 @@ export default function HomePage() {
               )}
             </div>
           )}
-        </div>
+        </main>
         <Composer
           busy={busy}
           onSubmit={ask}
