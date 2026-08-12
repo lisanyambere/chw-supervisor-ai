@@ -28,7 +28,7 @@ make up
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 0 — Infrastructure | **Done** | Docker stack up: OpenMRS 3, Postgres, Redis, Langfuse, Prometheus, Grafana |
+| 0 — Infrastructure | **Done** | Docker stack up: OpenMRS 3, Postgres, Redis, Prometheus, Grafana; tracing via Langfuse Cloud |
 | 1 — Synthetic data | **Done** | Synthea + Kenyan localization + CHW overlay + FHIR bulk load (deceased backfill included) |
 | 2 — Backend agents | **Done** | FastAPI + LangGraph briefing agent, FHIR client, tool registry, Langfuse traces |
 | 3 — Evaluator | **Done** | Rule-based scorers, LLM-as-judge (action + citations), golden-question runner |
@@ -44,10 +44,10 @@ make up
 |---------|-----|-------|
 | OpenMRS 3 backend | http://localhost:8080/openmrs | admin / Admin123 |
 | OpenMRS 3 frontend | http://localhost:8081 | SPA |
-| Langfuse | http://localhost:3100 | Create account on first visit; copy API keys to .env |
+| Langfuse Cloud | https://us.cloud.langfuse.com | Create a project; copy API keys to .env |
 | Grafana | http://localhost:3200 | admin / admin |
 | Prometheus | http://localhost:9090 | |
-| Postgres | localhost:5432 | DBs: community_health, langfuse |
+| Postgres | localhost:5432 | DB: community_health |
 | Redis | localhost:6379 | |
 
 ---
@@ -78,13 +78,13 @@ services separately to avoid pressure:
 | Redis healthy | ✓ localhost:6379 |
 | Prometheus healthy | ✓ localhost:9090 |
 | Grafana healthy | ✓ localhost:3200 |
-| Langfuse healthy | ✓ localhost:3100 |
+| Langfuse Cloud reachable | ✓ us.cloud.langfuse.com |
 | OpenMRS REST API | ✓ authenticated |
 | OpenMRS FHIR R4 | ✓ CapabilityStatement, fhirVersion 4.0.1 |
 
 ## Before Phase 1
 
-- [ ] Create Langfuse account at `http://localhost:3100`, add keys to `.env`
+- [ ] Create a Langfuse Cloud project at `https://us.cloud.langfuse.com`, add its keys to `.env`
 - [ ] Install Java 21: `winget install Microsoft.OpenJDK.21` (Java 8 on machine, Synthea needs 11+)
 
 ## Phase 1 — Synthetic data

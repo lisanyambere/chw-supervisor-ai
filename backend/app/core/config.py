@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     langfuse_public_key: str = Field(default="", alias="LANGFUSE_PUBLIC_KEY")
     langfuse_secret_key: str = Field(default="", alias="LANGFUSE_SECRET_KEY")
     langfuse_host: str = Field(
-        default="http://localhost:3100", alias="LANGFUSE_HOST"
+        default="https://us.cloud.langfuse.com", alias="LANGFUSE_HOST"
     )
 
     # ── Data ─────────────────────────────────────────────────────────────
