@@ -31,6 +31,15 @@ function ChwChip({
   );
 }
 
+// Turn every chw-NNN mentioned in prose into a chip that opens the drawer.
+function withChwChips(text: string, onClick?: (id: string) => void) {
+  return text
+    .split(/(chw-\d{3})/)
+    .map((part, i) =>
+      i % 2 === 1 ? <ChwChip key={i} id={part} onClick={onClick} /> : part,
+    );
+}
+
 function calloutGlyph(tone: Tone) {
   if (tone === "alert") return "!";
   if (tone === "warn") return "?";
@@ -61,18 +70,20 @@ function Callout({
   title,
   body,
   evidence,
+  onSelectChw,
 }: {
   tone: Tone;
   title: string;
   body: string;
   evidence: string[];
+  onSelectChw?: (id: string) => void;
 }) {
   return (
     <div className={cn("callout", `callout--${tone}`)}>
       <div className="callout__icon">{calloutGlyph(tone)}</div>
       <div>
         <div className="callout__title">{title}</div>
-        <div className="callout__body">{body}</div>
+        <div className="callout__body">{withChwChips(body, onSelectChw)}</div>
         {evidence.length > 0 && (
           <div className="callout__evidence">
             {evidence.map((e) => (
@@ -111,7 +122,7 @@ function Ranked({
           onClick={() => onSelectChw?.(it.id)}
           type="button"
         >
-          <ChwChip id={it.id} />
+          <span className="chip">{it.id}</span>
           <div>
             <div className="ranked__row__primary">{it.primary}</div>
             <div className="ranked__row__secondary">{it.secondary}</div>
@@ -182,6 +193,7 @@ function SectionRenderer({
           title={section.title}
           body={section.body}
           evidence={section.evidence}
+          onSelectChw={onSelectChw}
         />
       );
     case "ranked":

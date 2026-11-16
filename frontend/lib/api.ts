@@ -118,6 +118,37 @@ export async function getReady(
   return (await res.json()) as ReadinessResponse;
 }
 
+// ─── /chws/{id} (detail drawer) ─────────────────────────────────────────────
+
+export type DailyCount = {
+  date: string; // YYYY-MM-DD
+  encounter_count: number;
+};
+
+export type ChwDetail = {
+  chw_id: string;
+  practitioner_uuid: string;
+  name: string | null;
+  ward: string | null;
+  encounters_30d: number;
+  encounters_7d: number;
+  patients_30d: number;
+  daily: DailyCount[]; // last 7 days, oldest first
+};
+
+export async function getChwDetail(
+  chwId: string,
+  opts: { signal?: AbortSignal } = {},
+): Promise<ChwDetail> {
+  const res = await fetch(
+    `${BACKEND_URL}/chws/${encodeURIComponent(chwId)}`,
+    { signal: opts.signal },
+  );
+  if (res.status === 404) throw new Error(`${chwId} is not on the roster.`);
+  if (!res.ok) throw new Error(`CHW lookup failed: ${res.status}`);
+  return (await res.json()) as ChwDetail;
+}
+
 // ─── /briefing/stream (SSE) ─────────────────────────────────────────────────
 //
 // Mirrors backend/app/agents/briefing.py:StreamEvent. The wire format is

@@ -6,6 +6,7 @@ import { Topbar } from "@/components/Topbar";
 import { Hero } from "@/components/Hero";
 import { Composer } from "@/components/Composer";
 import { AiTurn, UserTurn, type Turn } from "@/components/Conversation";
+import { ChwDrawer } from "@/components/ChwDrawer";
 import { getReady, streamBriefing, type PlanStep } from "@/lib/api";
 
 function uid() {
@@ -24,6 +25,7 @@ export default function HomePage() {
   const [nav, setNav] = useState<NavId>("brief");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  const [drawerChw, setDrawerChw] = useState<string | null>(null);
   const [backendStatus, setBackendStatus] = useState<
     "checking" | "ready" | "down"
   >("checking");
@@ -226,7 +228,7 @@ export default function HomePage() {
                 t.role === "user" ? (
                   <UserTurn key={t.id} q={t.q} t={t.t} />
                 ) : (
-                  <AiTurn key={t.id} turn={t} />
+                  <AiTurn key={t.id} turn={t} onSelectChw={setDrawerChw} />
                 ),
               )}
             </div>
@@ -241,6 +243,11 @@ export default function HomePage() {
           }
         />
       </div>
+      <ChwDrawer
+        chwId={drawerChw}
+        onClose={() => setDrawerChw(null)}
+        onAsk={ask}
+      />
     </div>
   );
 }
