@@ -89,3 +89,22 @@ class BriefingResponse(BaseModel):
     # New: structured answer for the UI. Optional so the endpoint can skip
     # the second LLM call (and its latency cost) when the caller asks.
     answer_doc: AnswerDocOut | None = None
+
+
+class DailyCount(BaseModel):
+    date: str  # YYYY-MM-DD
+    encounter_count: int
+
+
+class ChwDetailResponse(BaseModel):
+    """One CHW's profile and recent activity, for the detail drawer."""
+
+    chw_id: str
+    practitioner_uuid: str
+    # Read back from the OpenMRS Practitioner; None when OpenMRS did not keep it.
+    name: str | None = None
+    ward: str | None = None
+    encounters_30d: int
+    encounters_7d: int
+    patients_30d: int
+    daily: list[DailyCount]  # last 7 days, oldest first

@@ -7,6 +7,7 @@ import json
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -19,6 +20,8 @@ from app.api.schemas import (
     AnswerDocOut,
     BriefingRequest,
     BriefingResponse,
+    ChwDetailResponse,
+    DailyCount,
     LivenessResponse,
     PlanStepOut,
     ReadinessResponse,
@@ -30,6 +33,7 @@ from app.llm import get_llm
 from app.observability import aflush as langfuse_flush
 from app.observability import get_langfuse, metrics_router
 from app.observability.metrics import REQUEST_LATENCY
+from app.tools.chw import chw_patient_panel, count_chw_encounters, visits_by_day
 
 log = get_logger(__name__)
 
@@ -201,6 +205,60 @@ async def briefing(
         plan=[PlanStepOut(**vars(s)) for s in result.plan],
         trace_id=result.trace_id,
         answer_doc=answer_doc,
+    )
+
+
+CHW_WARD_EXTENSION_URL = "http://community-health-ai/chw-ward"
+
+
+def _practitioner_name(practitioner: dict[str, Any]) -> str | None:
+    for name in practitioner.get("name") or []:
+        if name.get("text"):
+            return str(name["text"])
+        parts = [*(name.get("given") or []), name.get("family")]
+        joined = " ".join(p for p in parts if p)
+        if joined:
+            return joined
+    return None
+
+
+def _practitioner_ward(practitioner: dict[str, Any]) -> str | None:
+    for ext in practitioner.get("extension") or []:
+        if ext.get("url") == CHW_WARD_EXTENSION_URL:
+            value = ext.get("valueString")
+            return str(value) if value else None
+    return None
+
+
+@app.get("/chws/{chw_id}", response_model=ChwDetailResponse)
+async def chw_detail(
+    chw_id: str,
+    fhir: FhirClient = Depends(get_fhir),
+) -> ChwDetailResponse:
+    practitioner_uuid = get_id_map().practitioners.get(chw_id)
+    if practitioner_uuid is None:
+        raise HTTPException(status_code=404, detail=f"unknown chw_id: {chw_id}")
+
+    try:
+        practitioner, month, week, daily, panel = await asyncio.gather(
+            fhir.read("Practitioner", practitioner_uuid),
+            count_chw_encounters(fhir, chw_id, days=30),
+            count_chw_encounters(fhir, chw_id, days=7),
+            visits_by_day(fhir, days=7, chw_id=chw_id),
+            chw_patient_panel(fhir, chw_id, days=30, limit=200),
+        )
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"upstream: {e}") from e
+
+    return ChwDetailResponse(
+        chw_id=chw_id,
+        practitioner_uuid=practitioner_uuid,
+        name=_practitioner_name(practitioner),
+        ward=_practitioner_ward(practitioner),
+        encounters_30d=month["encounter_count"],
+        encounters_7d=week["encounter_count"],
+        patients_30d=panel["patient_count"],
+        daily=[DailyCount(**d) for d in daily["series"]],
     )
 
 
