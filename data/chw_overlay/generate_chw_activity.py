@@ -10,6 +10,7 @@ Creates:
 Output: data/fixtures/chw/ as FHIR bundles
 """
 import json
+import os
 import random
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -19,10 +20,21 @@ from typing import Any
 SEED = 42
 random.seed(SEED)
 
-# Demo week: Mon Apr 27 – Sun May 3, 2026 (relative to project date 2026-05-03)
-DEMO_WEEK_START = datetime(2026, 4, 27, tzinfo=timezone.utc)
-DEMO_WEEK_END   = datetime(2026, 5,  3, 23, 59, tzinfo=timezone.utc)
-PREV_WEEK_START = DEMO_WEEK_START - timedelta(weeks=1)
+def _demo_week_start() -> datetime:
+    # The backend tools look back from "now", so the demo week has to sit just
+    # behind the day the data is generated: the most recent complete Mon–Sun
+    # week. Set DEMO_WEEK_START=YYYY-MM-DD (a Monday) to pin it instead.
+    pinned = os.environ.get("DEMO_WEEK_START")
+    if pinned:
+        start = datetime.strptime(pinned, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        if start.weekday() != 0:
+            raise SystemExit(f"DEMO_WEEK_START must be a Monday, got {pinned}")
+        return start
+    today = datetime.now(tz=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    return today - timedelta(days=today.weekday() + 7)
+
+
+DEMO_WEEK_START = _demo_week_start()
 
 WARDS = [
     "Lurambi", "Mumias East", "Mumias West", "Likuyani",
