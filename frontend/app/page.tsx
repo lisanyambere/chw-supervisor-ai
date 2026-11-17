@@ -7,7 +7,8 @@ import { Hero } from "@/components/Hero";
 import { Composer } from "@/components/Composer";
 import { AiTurn, UserTurn, type Turn } from "@/components/Conversation";
 import { ChwDrawer } from "@/components/ChwDrawer";
-import { getReady, streamBriefing, type PlanStep } from "@/lib/api";
+import { getReady, streamBriefing } from "@/lib/api";
+import { EMPTY_TEAM, applyFrame } from "@/lib/team";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -90,8 +91,7 @@ export default function HomePage() {
     const placeholder: Turn = {
       id: aiId,
       role: "ai",
-      plan: [],
-      activeIdx: 0,
+      team: EMPTY_TEAM,
       doc: null,
       sources: [],
       traceId: null,
@@ -111,72 +111,39 @@ export default function HomePage() {
       q,
       {
         onFrame: (frame) => {
-          if (frame.kind === "tool_start") {
-            // Append a row in `running` state — the spinner is driven by
-            // i === activeIdx, so we push a placeholder PlanStep and bump
-            // activeIdx to it.
-            const step: PlanStep = {
-              tool: frame.tool,
-              args: frame.args,
-              ms: 0,
-              rows: 0,
-            };
-            patchAi((t) => ({
-              ...t,
-              plan: [...t.plan, step],
-              activeIdx: t.plan.length,
-            }));
-          } else if (frame.kind === "tool_done") {
-            // Replace the matching pending row with timed values. Match
-            // on (tool, args) FIFO — same semantics as backend _derive_plan.
-            patchAi((t) => {
-              const idx = t.plan.findIndex(
-                (s) =>
-                  s.tool === frame.tool &&
-                  s.args === frame.args &&
-                  s.ms === 0,
-              );
-              if (idx === -1) return t;
-              const next = t.plan.slice();
-              next[idx] = {
-                tool: frame.tool,
-                args: frame.args,
-                ms: frame.ms,
-                rows: frame.rows,
+          patchAi((t) => {
+            const next = { ...t, team: applyFrame(t.team, frame) };
+            if (frame.kind === "response") {
+              return {
+                ...next,
+                doc: frame.answer_doc,
+                sources: frame.answer_doc?.sources ?? [],
+                traceId: frame.trace_id,
+                done: true,
               };
-              return { ...t, plan: next, activeIdx: idx + 1 };
-            });
-          } else if (frame.kind === "response") {
-            patchAi((t) => ({
-              ...t,
-              plan: frame.plan, // canonical ordering from backend
-              activeIdx: frame.plan.length,
-              doc: frame.answer_doc,
-              sources: frame.answer_doc?.sources ?? [],
-              traceId: frame.trace_id,
-              done: true,
-            }));
-          } else if (frame.kind === "error") {
-            patchAi((t) => ({
-              ...t,
-              plan: [],
-              doc: {
-                headline: "The briefing run failed.",
-                period: "",
-                sections: [
-                  {
-                    kind: "callout",
-                    tone: "alert",
-                    title: "Agent error",
-                    body: frame.message,
-                    evidence: [],
-                  },
-                ],
-                sources: [],
-              },
-              done: true,
-            }));
-          }
+            }
+            if (frame.kind === "error") {
+              return {
+                ...next,
+                doc: {
+                  headline: "The briefing run failed.",
+                  period: "",
+                  sections: [
+                    {
+                      kind: "callout",
+                      tone: "alert",
+                      title: "Agent error",
+                      body: frame.message,
+                      evidence: [],
+                    },
+                  ],
+                  sources: [],
+                },
+                done: true,
+              };
+            }
+            return next;
+          });
         },
         onTransportError: (e) => {
           console.error("briefing stream transport error", e);
@@ -185,6 +152,7 @@ export default function HomePage() {
               ? t
               : {
                   ...t,
+                  team: { ...t.team, done: true },
                   doc: {
                     headline: "Couldn't reach the briefing service.",
                     period: "",

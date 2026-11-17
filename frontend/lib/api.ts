@@ -51,6 +51,31 @@ export type PlanStep = {
   args: string;
   ms: number;
   rows: number;
+  agent?: string | null; // the specialist that made the call
+};
+
+/** Did every figure in the answer trace back to a tool result? */
+export type Verification = {
+  grounded: boolean;
+  figures_checked: number;
+  ungrounded_numbers: string[];
+  ungrounded_chw_ids: string[];
+  revisions: number;
+};
+
+export type AgentRun = {
+  name: string;
+  findings: string;
+  tool_calls: number;
+  ms: number;
+};
+
+/** The multi-agent part of a briefing: who was engaged and what they found. */
+export type TeamDetail = {
+  route: string[];
+  route_reason: string;
+  agents: AgentRun[];
+  verification: Verification | Record<string, never>;
 };
 
 export type BriefingResponse = {
@@ -60,7 +85,7 @@ export type BriefingResponse = {
   trace_id: string | null;
   plan: PlanStep[];
   answer_doc: AnswerDoc | null;
-};
+} & TeamDetail;
 
 export async function postBriefing(
   question: string,
@@ -152,18 +177,31 @@ export async function getChwDetail(
 // ─── /briefing/stream (SSE) ─────────────────────────────────────────────────
 //
 // Mirrors backend/app/agents/briefing.py:StreamEvent. The wire format is
-// SSE with named events: tool_start, tool_done, response, error. The
+// SSE with named events: route, agent_start, tool_start, tool_done,
+// agent_done, verify, response, error. The
 // `response` frame carries the same shape as POST /briefing's body so
 // callers can render an AnswerDoc when the agent finishes.
 
+export type RouteFrame = {
+  kind: "route";
+  agents: string[];
+  reason?: string;
+};
+
+export type AgentStartFrame = { kind: "agent_start"; agent: string };
+export type AgentDoneFrame = { kind: "agent_done"; agent: string; ms: number };
+export type VerifyFrame = { kind: "verify"; verification: Verification };
+
 export type ToolStartFrame = {
   kind: "tool_start";
+  agent: string;
   tool: string;
   args: string;
 };
 
 export type ToolDoneFrame = {
   kind: "tool_done";
+  agent: string;
   tool: string;
   args: string;
   ms: number;
@@ -178,7 +216,7 @@ export type ResponseFrame = {
   plan: PlanStep[];
   trace_id: string | null;
   answer_doc: AnswerDoc | null;
-};
+} & TeamDetail;
 
 export type ErrorFrame = {
   kind: "error";
@@ -186,6 +224,10 @@ export type ErrorFrame = {
 };
 
 export type StreamFrame =
+  | RouteFrame
+  | AgentStartFrame
+  | AgentDoneFrame
+  | VerifyFrame
   | ToolStartFrame
   | ToolDoneFrame
   | ResponseFrame
@@ -229,6 +271,10 @@ export function streamBriefing(
   };
 
   const kinds: StreamFrame["kind"][] = [
+    "route",
+    "agent_start",
+    "agent_done",
+    "verify",
     "tool_start",
     "tool_done",
     "response",

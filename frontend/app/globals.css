@@ -562,6 +562,61 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .plan-card { box-shadow: 4px 4px 0 color-mix(in oklch, var(--ink) 6%, transparent); }
 .chip, .nav-badge { border-radius: 2px; }
 
+/* ─── Briefing team timeline ────────────────────────────────────────── */
+.team-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-3);
+  font: 400 11px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+.team-head > :last-child { text-transform: none; letter-spacing: 0; }
+.team-stage {
+  display: grid; grid-template-columns: 18px 1fr; gap: 12px; align-items: center;
+  padding: 10px 14px;
+  border-top: 1px dashed var(--line);
+  font: 400 12px var(--font-mono);
+}
+.team-head + .team-stage { border-top: 0; }
+.team-stage__name { color: var(--ink); font-weight: 600; }
+.team-stage__note { color: var(--ink-3); }
+.team-lanes {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border-top: 1px solid var(--line);
+}
+.team-lane { background: var(--surface); min-width: 0; }
+.team-lane.is-queued { color: var(--ink-3); }
+.team-lane__head {
+  display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px dashed var(--line);
+}
+.team-lane__name { font-size: 13px; font-weight: 600; }
+.team-lane__ms { color: var(--ink-3); font: 400 11px var(--font-mono); }
+.team-step {
+  display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start;
+  padding: 8px 14px;
+  font: 400 11px var(--font-mono);
+}
+.team-step__tool { overflow-wrap: anywhere; }
+.team-step__meta { color: var(--ink-3); font: 400 10px var(--font-mono); margin-top: 1px; }
+.team-verify {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--ok-bg);
+  color: var(--ink);
+  font-size: 12px;
+}
+.team-verify svg { flex: none; margin-top: 2px; color: var(--ok); }
+.team-verify--warn { background: var(--warn-bg); }
+.team-verify--warn svg { color: var(--warn); }
+
 /* ─── CHW detail drawer ─────────────────────────────────────────────── */
 .drawer-mask {
   position: fixed; inset: 0;
@@ -678,6 +733,4 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   .composer__hint > span:not(:last-child) { display: none; }
   .composer__hint .right { margin-left: 0; }
   .stat-row { grid-template-columns: repeat(2, 1fr); }
-  .plan-row { grid-template-columns: 18px 1fr auto; }
-  .plan-row > :last-child { display: none; }
 }

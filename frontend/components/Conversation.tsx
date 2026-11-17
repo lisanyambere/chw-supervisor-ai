@@ -1,16 +1,16 @@
 "use client";
 
-import type { AnswerDoc, PlanStep } from "@/lib/api";
+import type { AnswerDoc } from "@/lib/api";
+import type { TeamRun } from "@/lib/team";
 import { AnswerCard } from "@/components/AnswerCard";
-import { PlanTimeline } from "@/components/PlanTimeline";
+import { TeamTimeline } from "@/components/TeamTimeline";
 
 export type Turn =
   | { id: string; role: "user"; q: string; t: string }
   | {
       id: string;
       role: "ai";
-      plan: PlanStep[];
-      activeIdx: number;
+      team: TeamRun;
       doc: AnswerDoc | null;
       sources: string[];
       traceId: string | null;
@@ -48,9 +48,7 @@ export function AiTurn({
 }) {
   return (
     <div className="max-w-[940px] mx-auto px-6 pt-6 space-y-4">
-      {turn.plan.length > 0 && (
-        <PlanTimeline plan={turn.plan} activeIdx={turn.activeIdx} done={turn.done} />
-      )}
+      <TeamTimeline team={turn.team} />
       {turn.doc && (
         <AnswerCard
           doc={turn.doc}
