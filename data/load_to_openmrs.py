@@ -565,8 +565,11 @@ def smoke_test(patient_map: dict, chw_map: dict) -> bool:
 
     # 1. Participants must survive round-trip. Sample 20 encounters; if <50%
     #    carry a participant block, the participant references were silently
-    #    scrubbed (typically because of stale practitioner UUIDs).
-    page = _fhir_get(f"{FHIR_BASE}/Encounter?_count=20")
+    #    scrubbed (typically because of stale practitioner UUIDs). Sample from
+    #    patients we loaded — the OpenMRS demo data ships its own encounters
+    #    without participants and would otherwise fill the sample.
+    sample_patients = ",".join(list(patient_map.values())[:10])
+    page = _fhir_get(f"{FHIR_BASE}/Encounter?patient={sample_patients}&_count=20")
     entries = (page or {}).get("entry") or []
     if not entries:
         print("  Participant round-trip: SKIP (no encounters to sample)")
