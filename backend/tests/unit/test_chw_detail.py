@@ -69,7 +69,7 @@ def test_chw_detail_combines_profile_and_activity(client: TestClient) -> None:
     assert body["name"] == "Mary Wanjiku"
     assert body["ward"] == "Lurambi"
     assert body["encounters_30d"] == 12
-    assert body["encounters_7d"] == 12
+    assert body["encounters_7d"] == 21  # sum of the daily series
     assert body["patients_30d"] == 2
     assert [d["encounter_count"] for d in body["daily"]] == [3] * 7
     assert body["daily"] == sorted(body["daily"], key=lambda d: d["date"])

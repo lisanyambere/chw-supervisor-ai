@@ -240,10 +240,9 @@ async def chw_detail(
         raise HTTPException(status_code=404, detail=f"unknown chw_id: {chw_id}")
 
     try:
-        practitioner, month, week, daily, panel = await asyncio.gather(
+        practitioner, month, daily, panel = await asyncio.gather(
             fhir.read("Practitioner", practitioner_uuid),
             count_chw_encounters(fhir, chw_id, days=30),
-            count_chw_encounters(fhir, chw_id, days=7),
             visits_by_day(fhir, days=7, chw_id=chw_id),
             chw_patient_panel(fhir, chw_id, days=30, limit=200),
         )
@@ -256,7 +255,8 @@ async def chw_detail(
         name=_practitioner_name(practitioner),
         ward=_practitioner_ward(practitioner),
         encounters_30d=month["encounter_count"],
-        encounters_7d=week["encounter_count"],
+        # Summed from the daily series so the figure always matches the chart.
+        encounters_7d=daily["stats"]["total"],
         patients_30d=panel["patient_count"],
         daily=[DailyCount(**d) for d in daily["series"]],
     )
