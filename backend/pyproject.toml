@@ -15,6 +15,7 @@ dependencies = [
     "tenacity>=9.0",
     "langfuse>=3.0",
     "prometheus-client>=0.21",
+    "langgraph>=1.2",
 ]
 
 [project.optional-dependencies]

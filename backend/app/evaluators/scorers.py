@@ -122,24 +122,43 @@ _NUMBER_ALLOWLIST = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
 # ─── scorers ────────────────────────────────────────────────────────────────
 
 
+def cited_numbers(answer: str) -> list[str]:
+    """Numbers in `answer` worth checking (small literals are allowlisted)."""
+    return [n for n in _extract_numbers(answer) if n not in _NUMBER_ALLOWLIST]
+
+
+def ungrounded_numbers(answer: str, trace: list["TraceEvent"]) -> list[str]:
+    """Cited numbers that appear in no tool result."""
+    grounded = _numbers_in_results(_tool_results(trace))
+    return sorted({n for n in cited_numbers(answer) if n not in grounded})
+
+
+def ungrounded_chw_ids(answer: str, trace: list["TraceEvent"]) -> list[str]:
+    """CHW ids cited in `answer` that appear in no tool result."""
+    cited = {m.lower() for m in _CHW_RE.findall(answer or "")}
+    grounded_ids: set[str] = set()
+    for r in _tool_results(trace):
+        for s in _flatten_strings(r):
+            grounded_ids.update(m.lower() for m in _CHW_RE.findall(s))
+    return sorted(cited - grounded_ids)
+
+
 def numeric_fidelity(answer: str, trace: list["TraceEvent"]) -> EvalScore:
     """Fraction of numbers in `answer` that appear in some tool result.
 
     Allowlist covers small integers and the default lookback (30) so we don't
     penalise normal language ("top 2 CHWs", "last 30 days").
     """
-    nums = _extract_numbers(answer)
-    interesting = [n for n in nums if n not in _NUMBER_ALLOWLIST]
+    interesting = cited_numbers(answer)
     if not interesting:
         return EvalScore(
             "numeric_fidelity",
             1.0,
             comment="no non-trivial numbers cited",
         )
-    grounded = _numbers_in_results(_tool_results(trace))
-    hits = [n for n in interesting if n in grounded]
+    missing = ungrounded_numbers(answer, trace)
+    hits = [n for n in interesting if n not in missing]
     score = len(hits) / len(interesting)
-    missing = sorted(set(interesting) - set(hits))
     return EvalScore(
         "numeric_fidelity",
         score,
@@ -157,14 +176,9 @@ def entity_grounding(answer: str, trace: list["TraceEvent"]) -> EvalScore:
         return EvalScore(
             "entity_grounding", 1.0, comment="no CHW ids cited"
         )
-    grounded_ids: set[str] = set()
-    for r in _tool_results(trace):
-        for s in _flatten_strings(r):
-            for m in _CHW_RE.findall(s):
-                grounded_ids.add(m.lower())
-    hits = [c for c in cited if c in grounded_ids]
+    missing = ungrounded_chw_ids(answer, trace)
+    hits = [c for c in cited if c not in missing]
     score = len(hits) / len(cited)
-    missing = sorted(set(cited) - set(hits))
     return EvalScore(
         "entity_grounding",
         score,

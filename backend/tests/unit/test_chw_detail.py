@@ -22,15 +22,7 @@ class _FakeFhir:
 
     async def read(self, _rtype: str, rid: str) -> dict:
         assert rid == "uuid-chw-1"
-        return {
-            "name": [{"given": ["Mary"], "family": "Wanjiku"}],
-            "extension": [
-                {
-                    "url": "http://community-health-ai/chw-ward",
-                    "valueString": "Lurambi",
-                }
-            ],
-        }
+        return {"name": [{"given": ["Mary"], "family": "Wanjiku"}]}
 
     async def search(
         self, _rtype: str, params: dict[str, Any] | None = None, *, max_pages: int = 5
@@ -44,7 +36,11 @@ class _FakeFhir:
 
 @pytest.fixture(autouse=True)
 def _patch_id_map(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = IdMap(patients={}, practitioners={"chw-001": "uuid-chw-1"})
+    fake = IdMap(
+        patients={},
+        practitioners={"chw-001": "uuid-chw-1"},
+        chw_wards={"chw-001": "Lurambi"},
+    )
     monkeypatch.setattr(api_main, "get_id_map", lambda: fake)
     monkeypatch.setattr(chw_tools, "get_id_map", lambda: fake)
 

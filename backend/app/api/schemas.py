@@ -67,6 +67,16 @@ class PlanStepOut(BaseModel):
     args: str  # already-rendered, e.g. "(days=30)"
     ms: int
     rows: int
+    agent: str | None = None  # the specialist that made the call
+
+
+class AgentRunOut(BaseModel):
+    """One specialist's part in a briefing."""
+
+    name: str
+    findings: str
+    tool_calls: int
+    ms: int
 
 
 class AnswerDocOut(BaseModel):
@@ -89,6 +99,12 @@ class BriefingResponse(BaseModel):
     # New: structured answer for the UI. Optional so the endpoint can skip
     # the second LLM call (and its latency cost) when the caller asks.
     answer_doc: AnswerDocOut | None = None
+    # Multi-agent detail: who the router engaged, what each specialist found,
+    # and whether every figure in the answer traced back to a tool result.
+    route: list[str] = Field(default_factory=list)
+    route_reason: str = ""
+    agents: list[AgentRunOut] = Field(default_factory=list)
+    verification: dict[str, Any] = Field(default_factory=dict)
 
 
 class DailyCount(BaseModel):
@@ -101,9 +117,8 @@ class ChwDetailResponse(BaseModel):
 
     chw_id: str
     practitioner_uuid: str
-    # Read back from the OpenMRS Practitioner; None when OpenMRS did not keep it.
-    name: str | None = None
-    ward: str | None = None
+    name: str | None = None  # from the OpenMRS Practitioner
+    ward: str | None = None  # the CHW's home ward, from the id map
     encounters_30d: int
     encounters_7d: int
     patients_30d: int

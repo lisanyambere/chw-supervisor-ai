@@ -15,8 +15,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.responses import Response
 
-from app.agents import StreamEvent, format_answer, run_briefing
+from app.agents import BriefingResult, StreamEvent, format_answer, run_briefing
 from app.api.schemas import (
+    AgentRunOut,
     AnswerDocOut,
     BriefingRequest,
     BriefingResponse,
@@ -205,10 +206,23 @@ async def briefing(
         plan=[PlanStepOut(**vars(s)) for s in result.plan],
         trace_id=result.trace_id,
         answer_doc=answer_doc,
+        **_team_detail(result),
     )
 
 
-CHW_WARD_EXTENSION_URL = "http://community-health-ai/chw-ward"
+def _team_detail(result: BriefingResult) -> dict[str, Any]:
+    """The multi-agent part of a result, shared by /briefing and the stream."""
+    return {
+        "route": result.route,
+        "route_reason": result.route_reason,
+        "agents": [
+            AgentRunOut(
+                name=a.name, findings=a.findings, tool_calls=a.tool_calls, ms=a.ms
+            ).model_dump()
+            for a in result.agents
+        ],
+        "verification": result.verification,
+    }
 
 
 def _practitioner_name(practitioner: dict[str, Any]) -> str | None:
@@ -222,20 +236,13 @@ def _practitioner_name(practitioner: dict[str, Any]) -> str | None:
     return None
 
 
-def _practitioner_ward(practitioner: dict[str, Any]) -> str | None:
-    for ext in practitioner.get("extension") or []:
-        if ext.get("url") == CHW_WARD_EXTENSION_URL:
-            value = ext.get("valueString")
-            return str(value) if value else None
-    return None
-
-
 @app.get("/chws/{chw_id}", response_model=ChwDetailResponse)
 async def chw_detail(
     chw_id: str,
     fhir: FhirClient = Depends(get_fhir),
 ) -> ChwDetailResponse:
-    practitioner_uuid = get_id_map().practitioners.get(chw_id)
+    idmap = get_id_map()
+    practitioner_uuid = idmap.practitioners.get(chw_id)
     if practitioner_uuid is None:
         raise HTTPException(status_code=404, detail=f"unknown chw_id: {chw_id}")
 
@@ -253,7 +260,7 @@ async def chw_detail(
         chw_id=chw_id,
         practitioner_uuid=practitioner_uuid,
         name=_practitioner_name(practitioner),
-        ward=_practitioner_ward(practitioner),
+        ward=idmap.chw_wards.get(chw_id),
         encounters_30d=month["encounter_count"],
         # Summed from the daily series so the figure always matches the chart.
         encounters_7d=daily["stats"]["total"],
@@ -314,6 +321,7 @@ async def briefing_stream(
                     "plan": [vars(p) for p in result.plan],
                     "trace_id": result.trace_id,
                     "answer_doc": answer_doc_dict,
+                    **_team_detail(result),
                 }
             )
         except Exception as e:  # noqa: BLE001

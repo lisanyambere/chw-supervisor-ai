@@ -1,4 +1,5 @@
 from app.agents.briefing import (
+    AgentRun,
     BriefingResult,
     PlanStep,
     StreamEvent,
@@ -8,6 +9,7 @@ from app.agents.briefing import (
 from app.agents.formatter import AnswerDoc, format_answer
 
 __all__ = [
+    "AgentRun",
     "AnswerDoc",
     "BriefingResult",
     "PlanStep",
