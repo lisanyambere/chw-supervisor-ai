@@ -212,3 +212,50 @@ async def test_chw_patient_panel_respects_limit() -> None:
 async def test_chw_patient_panel_unknown_chw() -> None:
     out = await chw_tools.chw_patient_panel(FakeFhir(), chw_id="nope")  # type: ignore[arg-type]
     assert "error" in out
+
+
+async def test_activity_gaps_flags_early_stop_and_late_start() -> None:
+    from datetime import UTC, date, datetime, timedelta
+
+    today = datetime.now(tz=UTC).date()
+    weekdays = [
+        d
+        for d in (today - timedelta(days=i) for i in range(13, -1, -1))
+        if d.weekday() < 5
+    ]
+    # chw-001 works every weekday except the last two; chw-002 works only the
+    # last two; chw-003 (added below) works them all and sets the team norm.
+    worked = {
+        "uuid-chw-1": set(weekdays[:-2]),
+        "uuid-chw-2": set(weekdays[-2:]),
+        "uuid-chw-3": set(weekdays),
+        "uuid-chw-4": set(weekdays),
+    }
+    fake = IdMap(
+        patients={},
+        practitioners={f"chw-00{i}": f"uuid-chw-{i}" for i in range(1, 5)},
+    )
+
+    class DayFhir:
+        async def count(self, _rtype: str, params: dict[str, Any]) -> int:
+            day = date.fromisoformat(params["date"][0][2:12])
+            # Bounds must carry a time, or OpenMRS double-counts neighbours.
+            assert params["date"][0].endswith("T00:00:00Z")
+            return 5 if day in worked[params["participant"]] else 0
+
+    import pytest as _pytest
+
+    mp = _pytest.MonkeyPatch()
+    mp.setattr(chw_tools, "get_id_map", lambda: fake)
+    try:
+        out = await chw_tools.chw_activity_gaps(DayFhir(), days=14)  # type: ignore[arg-type]
+    finally:
+        mp.undo()
+
+    assert out["team_last_active"] == weekdays[-1].isoformat()
+    by_id = {r["chw_id"]: r for r in out["rows"]}
+    assert set(by_id) == {"chw-001", "chw-002"}
+    assert by_id["chw-001"]["pattern"] == "stopped_early"
+    assert by_id["chw-001"]["weekdays_missed_before_team_last_active"] == 2
+    assert by_id["chw-002"]["pattern"] == "started_late"
+    assert by_id["chw-002"]["first_active"] == weekdays[-2].isoformat()

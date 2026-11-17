@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from collections.abc import Iterable
+from datetime import UTC, date, datetime, timedelta
+from statistics import median
 from typing import Any
 
 from app.fhir import FhirClient, get_id_map
+from app.tools._shared import gather_bounded
 from app.tools.registry import tool
 
 
@@ -119,6 +122,25 @@ async def team_activity_summary(
         stats = {"min": 0, "max": 0, "mean": 0.0, "total": 0}
 
     return {"days": days, "since": since, "rows": rows, "stats": stats}
+
+
+async def _count_on_day(
+    client: FhirClient, day: date, practitioner_uuid: str | None = None
+) -> int:
+    """Encounters that started on one UTC day.
+
+    The bounds carry a time: OpenMRS reads a bare `lt<day>` as "before the end
+    of that day", which makes neighbouring days overlap and double-count.
+    """
+    params: dict[str, Any] = {
+        "date": [
+            f"ge{day.isoformat()}T00:00:00Z",
+            f"lt{(day + timedelta(days=1)).isoformat()}T00:00:00Z",
+        ]
+    }
+    if practitioner_uuid is not None:
+        params["participant"] = practitioner_uuid
+    return await client.count("Encounter", params=params)
 
 
 def _resolve_practitioner_uuid(chw_id: str) -> str | None:
@@ -236,11 +258,8 @@ async def visits_by_day(
     today = datetime.now(tz=UTC).date()
     day_dates = [today - timedelta(days=i) for i in range(days - 1, -1, -1)]
 
-    async def _count_for(d: Any) -> tuple[str, int]:
-        params: dict[str, Any] = {"date": [f"ge{d.isoformat()}", f"lt{(d + timedelta(days=1)).isoformat()}"]}
-        if practitioner_uuid is not None:
-            params["participant"] = practitioner_uuid
-        n = await client.count("Encounter", params=params)
+    async def _count_for(d: date) -> tuple[str, int]:
+        n = await _count_on_day(client, d, practitioner_uuid)
         return d.isoformat(), n
 
     pairs = await asyncio.gather(*(_count_for(d) for d in day_dates))
@@ -334,3 +353,90 @@ async def chw_patient_panel(
         "patient_count": len(seen),
         "patients": list(seen.values()),
     }
+
+
+@tool(
+    name="chw_activity_gaps",
+    description=(
+        "Find CHWs whose pattern of working days is out of step with the team "
+        "over the last N days: those who stopped logging visits earlier than "
+        "everyone else, and those whose visits only began recently. A raw "
+        "30-day total hides both, so use this before calling anyone a low "
+        "performer. Also returns the team's usual first and last active dates."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "days": {
+                "type": "integer",
+                "description": "Look-back window in days. Default 14.",
+                "default": 14,
+                "minimum": 7,
+                "maximum": 30,
+            }
+        },
+        "required": [],
+    },
+)
+async def chw_activity_gaps(client: FhirClient, days: int = 14) -> dict[str, Any]:
+    idmap = get_id_map()
+    today = datetime.now(tz=UTC).date()
+    weekdays = [
+        d
+        for d in (today - timedelta(days=i) for i in range(days - 1, -1, -1))
+        if d.weekday() < 5
+    ]
+    chws = sorted(idmap.practitioners.items())
+    counts = await gather_bounded(
+        _count_on_day(client, d, uuid) for _, uuid in chws for d in weekdays
+    )
+
+    active: dict[str, list[date]] = {}
+    for i, (chw_id, _) in enumerate(chws):
+        per_day = counts[i * len(weekdays) : (i + 1) * len(weekdays)]
+        active[chw_id] = [d for d, n in zip(weekdays, per_day, strict=True) if n > 0]
+
+    working = {c: ds for c, ds in active.items() if ds}
+    if not working:
+        return {
+            "days": days,
+            "team_first_active": None,
+            "team_last_active": None,
+            "rows": [],
+        }
+    team_first = _median_date(ds[0] for ds in working.values())
+    team_last = _median_date(ds[-1] for ds in working.values())
+
+    rows: list[dict[str, Any]] = []
+    for chw_id, ds in active.items():
+        if not ds:
+            pattern = "no_visits"
+        elif ds[-1] < team_last:
+            pattern = "stopped_early"
+        elif ds[0] > team_first:
+            pattern = "started_late"
+        else:
+            continue
+        rows.append(
+            {
+                "chw_id": chw_id,
+                "pattern": pattern,
+                "first_active": ds[0].isoformat() if ds else None,
+                "last_active": ds[-1].isoformat() if ds else None,
+                "active_weekdays": len(ds),
+                "weekdays_missed_before_team_last_active": sum(
+                    1 for d in weekdays if ds and ds[-1] < d <= team_last
+                ),
+            }
+        )
+    return {
+        "days": days,
+        "weekdays_in_window": len(weekdays),
+        "team_first_active": team_first.isoformat(),
+        "team_last_active": team_last.isoformat(),
+        "rows": rows,
+    }
+
+
+def _median_date(dates: Iterable[date]) -> date:
+    return date.fromordinal(int(median(d.toordinal() for d in dates)))
