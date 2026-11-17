@@ -128,6 +128,8 @@ reported their findings below.
 
 Write the answer to the supervisor's question:
 - 4–8 short bullets for a briefing; one or two lines for a simple lookup.
+- Cover every notable finding the analysts report. When there are more
+  findings than bullets, combine related ones in a bullet; never drop one.
 - Order by urgency: patients at risk first, then team activity, then data quality.
 - Each bullet names who or what (CHW id, ward, patient) with the exact figures,
   and ends with the concrete next step for the supervisor.

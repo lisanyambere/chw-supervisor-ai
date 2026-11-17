@@ -1,0 +1,197 @@
+[
+  {
+    "run": 1,
+    "trace_id": "e4094dfc50fef51625928b4c4615f433",
+    "seconds": 34.4,
+    "llm_calls": 8,
+    "tool_calls": 7,
+    "route": [
+      "team",
+      "clinical",
+      "quality"
+    ],
+    "verification": {
+      "grounded": true,
+      "figures_checked": 52,
+      "ungrounded_numbers": [],
+      "ungrounded_chw_ids": [],
+      "revisions": 0
+    },
+    "card_ungrounded_numbers": [],
+    "scenarios": {
+      "chw_disengagement": {
+        "judged": true,
+        "judge_reason": "The briefing clearly flags chw-001 as last active Tuesday and missing the next three working days, prompting coverage action.",
+        "named": true,
+        "on_card": true
+      },
+      "baseline_trap": {
+        "judged": true,
+        "judge_reason": "The briefing correctly identifies chw-002 as having only two active weekdays and frames the low total as onboarding rather than low effort.",
+        "named": true,
+        "on_card": true
+      },
+      "fever_cluster": {
+        "judged": true,
+        "judge_reason": "The briefing clearly reports the Lurambi 8-case malaria fever cluster within five days and links it to chw-003 for action.",
+        "named": true,
+        "on_card": true
+      },
+      "overdue_anc": {
+        "judged": true,
+        "judge_reason": "The briefing clearly identifies all three overdue pregnant patients and notes Namukhula Adhiambo's last systolic BP of 145.",
+        "named": true,
+        "on_card": true
+      },
+      "missing_location": {
+        "judged": true,
+        "judge_reason": "The briefing clearly reports 14 visits saved without location and directs CHWs to update them.",
+        "named": true,
+        "on_card": true
+      },
+      "visits_after_death": {
+        "judged": true,
+        "judge_reason": "The briefing clearly reports all three post-death visits for the correct patients and directs follow-up.",
+        "named": true,
+        "on_card": true
+      },
+      "child_danger_signs": {
+        "judged": true,
+        "judge_reason": "The briefing clearly identifies Khaemba Wanjala as an under-five seen by chw-005 with RR 62 and temperature 39.1\u00b0C requiring same-day referral.",
+        "named": true,
+        "on_card": true
+      }
+    },
+    "answer": "- Khaemba Wanjala, Mumias East, seen 2026-11-11 by chw-005: age 53 months, respiratory rate 62, temperature 39.1\u00b0C, fever not malaria diagnosed; confirm same-day referral and follow-up with chw-005 today.\n\n- Namukhula Adhiambo, Mumias East, chw-006: pregnant, last visit 2026-10-31, return date 2026-11-07, 10 days overdue, last systolic BP 145; send chw-006 for urgent follow-up today.\n\n- Lurambi possible outbreak: 8 fever cases from 2026-11-09 to 2026-11-13, all 8 malaria diagnosed, all seen by chw-003; verify the cluster with chw-003 and coordinate malaria response today.\n\n- Nafula Kamau, Mumias West, chw-008: pregnant, 16 days overdue; Naliaka Barasa, Mumias West, chw-007: pregnant, 13 days overdue; direct both CHWs to complete follow-ups today.\n\n- Team activity: chw-001 last active 2026-11-10, missed 3 working days before 2026-11-13, with 140 encounters; check in with chw-001 and arrange coverage if needed.\n\n- Team context: chw-002 has 20 encounters but started_late, first active 2026-11-12, last active 2026-11-13, active weekdays 2; support onboarding rather than treating as low effort.\n\n- Data quality: visits after recorded death need checking \u2014 chw-016 Butere Musungu Juma death_date 2021-02-21 visit_date 2026-11-10; chw-025 Lugari Njoroge Kamau death_date 2013-03-07 visit_date 2026-11-12; chw-019 Khwisero Wafula Nafula death_date 2017-10-18 visit_date 2026-11-12; ask each CHW to verify and correct records.\n\n- Data quality: 14 of 4,693 visits saved without location, led by chw-004 Mumias East 2 of 158 and chw-023 Shinyalu 2 of 150; have all listed CHWs update missing locations before reporting closes."
+  },
+  {
+    "run": 2,
+    "trace_id": "52f6546558c0e32dfbe90ed5072fc7e9",
+    "seconds": 18.0,
+    "llm_calls": 8,
+    "tool_calls": 7,
+    "route": [
+      "team",
+      "clinical",
+      "quality"
+    ],
+    "verification": {
+      "grounded": true,
+      "figures_checked": 38,
+      "ungrounded_numbers": [],
+      "ungrounded_chw_ids": [],
+      "revisions": 0
+    },
+    "card_ungrounded_numbers": [],
+    "scenarios": {
+      "chw_disengagement": {
+        "judged": true,
+        "judge_reason": "The briefing clearly identifies chw-001 as last active Tuesday and missing the next three working days, prompting follow-up.",
+        "named": true,
+        "on_card": true
+      },
+      "baseline_trap": {
+        "judged": false,
+        "judge_reason": "The briefing does not mention chw-002 John Otieno or explain that his low total is due to only two days of history.",
+        "named": false,
+        "on_card": false
+      },
+      "fever_cluster": {
+        "judged": true,
+        "judge_reason": "The briefing clearly identifies the Lurambi chw-003 cluster of 8 malaria fever cases within five days and recommends action.",
+        "named": true,
+        "on_card": true
+      },
+      "overdue_anc": {
+        "judged": true,
+        "judge_reason": "The briefing identifies all three pregnant overdue patients and highlights Namukhula\u2019s systolic BP of 145 for urgent follow-up.",
+        "named": true,
+        "on_card": true
+      },
+      "missing_location": {
+        "judged": false,
+        "judge_reason": "It reports 14 missing-location visits but does not state they occurred in the latest week.",
+        "named": true,
+        "on_card": true
+      },
+      "visits_after_death": {
+        "judged": true,
+        "judge_reason": "The briefing clearly flags visits after recorded death for the three correct patients and directs follow-up with the relevant CHWs.",
+        "named": true,
+        "on_card": true
+      },
+      "child_danger_signs": {
+        "judged": true,
+        "judge_reason": "The briefing clearly identifies Khaemba Wanjala under chw-005 with fever 39.1\u00b0C and respiratory rate 62/min needing immediate referral review.",
+        "named": true,
+        "on_card": true
+      }
+    },
+    "answer": "- **Khaemba Wanjala, Mumias East, chw-005:** 53 months, fast breathing **62/min** with fever **39.1\u00b0C**, seen **2026-11-11**; confirm same-day referral outcome and arrange immediate review.\n\n- **Namukhula Adhiambo, Mumias East, chw-006:** pregnant, systolic BP **145**, return date **2026-11-07**, **10 days overdue**; call chw-006 now to complete urgent follow-up today.\n\n- **Lurambi, chw-003:** **8 fever cases**, all malaria diagnosed, from **2026-11-09 to 2026-11-13**; alert the facility and have chw-003 check for additional fever cases today.\n\n- **Nafula Kamau and Naliaka Barasa, Mumias West:** Nafula Kamau with chw-008 is **16 days overdue** from **2026-11-01**; Naliaka Barasa with chw-007 is **13 days overdue** from **2026-11-04**; assign same-day pregnancy follow-up.\n\n- **Team activity:** **4,693 encounters** since **2026-10-18**; chw-001 logged **140 encounters** but was last active **2026-11-10**, missing **3 working days** before the team last active date; check in with chw-001 on availability today.\n\n- **High activity CHWs:** chw-005 and chw-026 recorded **172 encounters** each; chw-003 and chw-012 **171** each; chw-015 **170**; acknowledge performance and monitor workload.\n\n- **Data quality \u2014 visits after death:** chw-016 Musungu Juma, chw-025 Njoroge Kamau, and chw-019 Wafula Nafula have visits after recorded death; ask those CHWs to verify patient status and correct records.\n\n- **Data quality \u2014 missing location:** **14 of 4,693 visits** missing location, led by chw-004 and chw-023 with **2** each; remind all listed CHWs to enable location and correct missing entries where possible."
+  },
+  {
+    "run": 3,
+    "trace_id": "b27063e303ba87e96be06d73a123024e",
+    "seconds": 21.7,
+    "llm_calls": 8,
+    "tool_calls": 7,
+    "route": [
+      "team",
+      "clinical",
+      "quality"
+    ],
+    "verification": {
+      "grounded": true,
+      "figures_checked": 31,
+      "ungrounded_numbers": [],
+      "ungrounded_chw_ids": [],
+      "revisions": 0
+    },
+    "card_ungrounded_numbers": [],
+    "scenarios": {
+      "chw_disengagement": {
+        "judged": true,
+        "judge_reason": "The briefing clearly flags chw-001 as last active Tuesday and missing the next three working days, matching the mid-week stop finding.",
+        "named": true,
+        "on_card": true
+      },
+      "baseline_trap": {
+        "judged": true,
+        "judge_reason": "The briefing correctly identifies chw-002 as having low encounters due to starting on 2026-11-12 and says not to flag them as low effort.",
+        "named": true,
+        "on_card": true
+      },
+      "fever_cluster": {
+        "judged": true,
+        "judge_reason": "The briefing clearly reports the Lurambi chw-003 cluster of 8 fever cases over five days with all 8 malaria diagnosed.",
+        "named": true,
+        "on_card": true
+      },
+      "overdue_anc": {
+        "judged": true,
+        "judge_reason": "The briefing clearly identifies all three overdue pregnant patients and notes Namukhula Adhiambo's last systolic BP of 145.",
+        "named": true,
+        "on_card": true
+      },
+      "missing_location": {
+        "judged": false,
+        "judge_reason": "The briefing does not mention the 14 latest-week visits saved without a location.",
+        "named": false,
+        "on_card": true
+      },
+      "visits_after_death": {
+        "judged": true,
+        "judge_reason": "The briefing clearly reports 3 visits after recorded death and names the correct patients.",
+        "named": true,
+        "on_card": true
+      },
+      "child_danger_signs": {
+        "judged": true,
+        "judge_reason": "The briefing clearly identifies Khaemba Wanjala under chw-005 with fever 39.1\u00b0C and respiratory rate 62 and calls for urgent follow-up/referral action.",
+        "named": true,
+        "on_card": true
+      }
+    },
+    "answer": "- **Khaemba Wanjala, Mumias East, chw-005:** age **53 months**, respiratory rate **62.0** with fever **39.1\u00b0C** on **2026-11-11**; confirm same-day referral outcome and arrange urgent follow-up.\n\n- **Namukhula Adhiambo, Mumias East, chw-006:** pregnant follow-up overdue by **10 days**, last visit **2026-10-31**, return date **2026-11-07**, last systolic BP **145.0**; instruct chw-006 to visit today and escalate if BP remains high.\n\n- **Lurambi fever/malaria cluster, chw-003:** **8 fever cases** from **2026-11-09 to 2026-11-13**, all **8 malaria diagnosed**; ask chw-003 to check household/neighbour clustering and alert the facility.\n\n- **Nafula Kamau, Mumias West, chw-008** and **Naliaka Barasa, Mumias West, chw-007:** pregnant follow-ups overdue by **16 days** and **13 days**; have chw-008 and chw-007 complete visits today.\n\n- **Team activity:** **4,693 encounters** since **2026-10-18**; chw-001 has **140 encounters** but last active **2026-11-10** and missed **3 working days**, while chw-002 has **20 encounters** after starting **2026-11-12**; call chw-001 to confirm availability and do not flag chw-002 as low effort.\n\n- **Data quality:** verify **3 visits after recorded death** \u2014 chw-016 Musungu Juma, chw-025 Njoroge Kamau, chw-019 Wafula Nafula \u2014 and correct the records or death status."
+  }
+]
