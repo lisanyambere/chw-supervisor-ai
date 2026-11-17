@@ -30,11 +30,43 @@ make up
 |-------|--------|-------------|
 | 0 — Infrastructure | **Done** | Docker stack up: OpenMRS 3, Postgres, Redis, Prometheus, Grafana; tracing via Langfuse Cloud |
 | 1 — Synthetic data | **Done** | Synthea + Kenyan localization + CHW overlay + FHIR bulk load (deceased backfill included) |
-| 2 — Backend agents | **Done** | FastAPI + LangGraph briefing agent, FHIR client, tool registry, Langfuse traces |
-| 3 — Evaluator | **Done** | Rule-based scorers, LLM-as-judge (action + citations), golden-question runner |
-| 4 — Supervisor frontend | **In progress** | Next.js 15 + Tailwind shell, typed `/briefing` client, plan timeline, structured answer renderer |
+| 2 — Backend agents | **Done** | FastAPI + multi-agent LangGraph briefing team, FHIR client, tool registry, Langfuse traces |
+| 3 — Evaluator | **Done** | Rule-based scorers, LLM-as-judge, in-graph grounding verifier, scenario-recall evaluation |
+| 4 — Supervisor frontend | **In progress** | Next.js 15 + Tailwind shell, live briefing-team timeline, structured answer renderer, CHW detail drawer |
 | 5 — Observability | **Done** | Prometheus `/metrics`, request + tool + LLM histograms, Grafana dashboard, `/healthz` + `/readyz` |
 | 6 — Polish + deployment | Not started | README, video, VM deploy |
+
+---
+
+## How a briefing is produced
+
+```
+question → router ─┬→ team activity ──┐
+                   ├→ clinical signals ┼→ lead analyst → verifier → answer
+                   └→ data quality ───┘        ↑            │
+                                               └── rewrite ─┘  (at most once)
+```
+
+- **Router** engages only the specialists a question needs.
+- **Specialists** run in parallel, each a tool-calling agent over its own FHIR
+  tools: encounter counts and working-day gaps; fever cases by ward, child
+  danger signs and overdue follow-ups; visits with no location or logged
+  after a recorded death.
+- **Lead analyst** merges their findings, most urgent first.
+- **Verifier** is deterministic: every number and CHW id in the answer must
+  appear in a tool result, or the draft goes back for one rewrite.
+
+The graph is in `backend/app/agents/graph.py`. The frontend streams each step.
+
+### Evaluation
+
+The data generator plants seven scenarios (a fever cluster, a CHW who stops
+mid-week, overdue pregnancy follow-ups, and so on) and records them in
+`data/fixtures/scenarios.json`. `scripts/run_scenario_eval.py` runs the full
+briefing several times and scores how many each briefing surfaces. Latest
+run: **31 of 35** scenario findings judged conveyed over five runs, every
+answer passing the grounding check, about 28 s per briefing. Reports, with
+what the numbers do and do not show, are in [`docs/evals/`](docs/evals/).
 
 ---
 

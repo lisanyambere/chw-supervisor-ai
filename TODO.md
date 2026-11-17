@@ -5,18 +5,16 @@ plus the cross-cutting things that don't slot neatly into a phase.
 
 ## Next up — recommended order
 
-- **Highest demo value:** CHW detail drawer (Phase 4 #2). `chw-NNN` chips
-  already render but go nowhere — wire them to a right-side Sheet pulling
-  `count_chw_encounters` + `chw_patient_panel`. Makes the conversational
-  UI feel alive.
-- **Best for portfolio polish:** Activity charts view (Phase 4 #3). First
-  non-chat view, visually distinctive for a video/screenshot.
-- **Should-do-before-deploy:** Encounter idempotency bug in
-  `data/load_to_openmrs.py`. A re-run today silently doubles encounter
-  rows — bites any clean-data demo recording.
-- **Phase 6 kickoff:** Production Dockerfiles + `docker-compose.prod.yml`
-  so backend + frontend join the existing langfuse / prometheus / grafana
-  stack. Unlocks the VM deploy runbook.
+See `docs/portfolio-handover.md` for the portfolio plan. Remaining, in order:
+
+- **Activity charts view** (Phase 4). First non-chat view.
+- **Mobile pass** on the remaining views, then record the video and screenshots.
+- **Draft the case-study text.**
+- **Tell the supervisor when unlocated visits happened.** The scenario eval's
+  one consistent miss: `visits_missing_location` reports how many, not which
+  week, so the briefing cannot say they are recent.
+- **Calibrate the recall judge** against a human rating of a sample, and add
+  a false-alarm measure; the eval currently scores recall only.
 
 ## Phase 4 — Supervisor frontend (in progress)
 
@@ -25,8 +23,10 @@ plus the cross-cutting things that don't slot neatly into a phase.
   Trace id + answer_doc included in final frame. (commits ba4656c, d7c6432, 41a8624)
 - [ ] **Conversation persistence** — drop the reducer into localStorage (start)
   or Postgres so reloads don't wipe history.
-- [ ] **CHW detail drawer** — right-side `Sheet`, opened by any `chw-NNN` chip
-  or `.ranked__row`. Pulls `count_chw_encounters` + `chw_patient_panel`.
+- [x] **CHW detail drawer** — opened by any `chw-NNN` chip or ranked row,
+  backed by `GET /chws/{chw_id}`.
+- [x] **Briefing-team timeline** — router, one lane per specialist, lead
+  analyst and the grounding check, streamed live.
 - [ ] **Activity charts view** — 30-bar daily encounter chart with weekend
   tinting and red zero-day bars. First non-conversational view.
 - [ ] **CHW roster view** — full 30-row reuse of the ranked-row pattern.
@@ -63,10 +63,6 @@ plus the cross-cutting things that don't slot neatly into a phase.
 
 ## Known bugs / gaps (real, observed)
 
-- [ ] **Encounter idempotency** in `data/load_to_openmrs.py` — patients and
-  practitioners are checked by identifier before POST, encounters are not.
-  Re-running the loader doubles the encounter rows. Fix: search by
-  (patient, period.start, type) before POSTing.
 - [ ] **Silent Langfuse exception handlers** in `agents/briefing.py:154,
   308, 343` — should `log.debug(...)` so trace failures aren't invisible.
 - [ ] **Tool registry catches all errors with no log** in
@@ -96,11 +92,11 @@ plus the cross-cutting things that don't slot neatly into a phase.
 
 ## Data / infra state to be aware of
 
-- [ ] **Synthea data was reloaded on 2026-05-24** — patient count is 681
-  (581 Synthea + 100 OpenMRS demo) and encounter count is ~9952 (some
-  residue from prior partial loads). Backend works fine since it filters
-  by id_map, but a clean `docker compose down -v && up` would normalise
-  this if it ever matters for a demo recording.
+- The seeded demo week is the latest complete week before the day the data
+  was generated (currently 9–15 Nov 2026). Tools look back from today, so
+  re-seed (`down -v`, then `scripts/seed.sh`) shortly before recording.
+- Six tests in `tests/unit/test_llm_client.py` fail with connection errors:
+  the installed openai SDK no longer goes through the transport respx mocks.
 
 ## Recently shipped (for context — last 24h)
 
