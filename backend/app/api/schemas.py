@@ -112,6 +112,14 @@ class DailyCount(BaseModel):
     encounter_count: int
 
 
+class DailyActivityResponse(BaseModel):
+    """Team-wide encounters per day, for the activity chart."""
+
+    days: int
+    series: list[DailyCount]  # oldest first
+    total: int
+
+
 class ChwDetailResponse(BaseModel):
     """One CHW's profile and recent activity, for the detail drawer."""
 

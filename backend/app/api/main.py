@@ -22,6 +22,7 @@ from app.api.schemas import (
     BriefingRequest,
     BriefingResponse,
     ChwDetailResponse,
+    DailyActivityResponse,
     DailyCount,
     LivenessResponse,
     PlanStepOut,
@@ -230,6 +231,22 @@ def _practitioner_name(practitioner: dict[str, Any]) -> str | None:
         if joined:
             return joined
     return None
+
+
+@app.get("/activity/daily", response_model=DailyActivityResponse)
+async def daily_activity(
+    days: int = Query(30, ge=7, le=90),
+    fhir: FhirClient = Depends(get_fhir),
+) -> DailyActivityResponse:
+    try:
+        daily = await visits_by_day(fhir, days=days)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"upstream: {e}") from e
+    return DailyActivityResponse(
+        days=days,
+        series=[DailyCount(**d) for d in daily["series"]],
+        total=daily["stats"]["total"],
+    )
 
 
 @app.get("/chws/{chw_id}", response_model=ChwDetailResponse)

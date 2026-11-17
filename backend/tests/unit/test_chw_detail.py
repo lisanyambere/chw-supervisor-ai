@@ -17,7 +17,7 @@ class _FakeFhir:
 
     async def count(self, _rtype: str, params: dict[str, Any] | None = None) -> int:
         assert params is not None
-        assert params["participant"] == "uuid-chw-1"
+        assert params.get("participant", "uuid-chw-1") == "uuid-chw-1"
         return 3 if isinstance(params["date"], list) else 12
 
     async def read(self, _rtype: str, rid: str) -> dict:
@@ -69,6 +69,16 @@ def test_chw_detail_combines_profile_and_activity(client: TestClient) -> None:
     assert body["patients_30d"] == 2
     assert [d["encounter_count"] for d in body["daily"]] == [3] * 7
     assert body["daily"] == sorted(body["daily"], key=lambda d: d["date"])
+
+
+def test_daily_activity_returns_one_point_per_day(client: TestClient) -> None:
+    resp = client.get("/activity/daily", params={"days": 14})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["series"]) == 14
+    assert body["total"] == 3 * 14
+    assert body["series"] == sorted(body["series"], key=lambda d: d["date"])
 
 
 def test_chw_detail_unknown_id_is_404(client: TestClient) -> None:
