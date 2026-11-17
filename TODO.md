@@ -7,8 +7,7 @@ plus the cross-cutting things that don't slot neatly into a phase.
 
 See `docs/portfolio-handover.md` for the portfolio plan. Remaining, in order:
 
-- **Activity charts view** (Phase 4). First non-chat view.
-- **Mobile pass** on the remaining views, then record the video and screenshots.
+- **Record the video and screenshots** (re-seed first so the demo week is current).
 - **Draft the case-study text.**
 - **Tell the supervisor when unlocated visits happened.** The scenario eval's
   one consistent miss: `visits_missing_location` reports how many, not which
@@ -27,8 +26,8 @@ See `docs/portfolio-handover.md` for the portfolio plan. Remaining, in order:
   backed by `GET /chws/{chw_id}`.
 - [x] **Briefing-team timeline** — router, one lane per specialist, lead
   analyst and the grounding check, streamed live.
-- [ ] **Activity charts view** — 30-bar daily encounter chart with weekend
-  tinting and red zero-day bars. First non-conversational view.
+- [x] **Activity charts view** — 30-day chart backed by `GET /activity/daily`,
+  weekends muted, missed weekdays marked, table view.
 - [ ] **CHW roster view** — full 30-row reuse of the ranked-row pattern.
 - [ ] **Frontend test infrastructure** — vitest + @testing-library/react. Zero
   tests today. At minimum cover `postBriefing` error path, Composer busy
@@ -41,7 +40,8 @@ See `docs/portfolio-handover.md` for the portfolio plan. Remaining, in order:
   a `signal`, and the mount probe in `app/page.tsx` aborts on unmount.
   `streamBriefing` already had `closeStream.current` wired to unmount.
   `postBriefing` retains its existing `signal` param (no in-app caller yet).
-- [ ] **Mobile pass** — composer / sidebar / drawer responsive.
+- [x] **Mobile pass** — icon nav strip, team timeline, drawer, chart and
+  composer checked at 390px.
 
 ## Phase 6 — Polish + deployment (not started)
 
