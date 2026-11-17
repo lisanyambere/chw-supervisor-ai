@@ -5,9 +5,10 @@ Generates CHW activity overlay on top of localized Synthea FHIR data.
 Creates:
 - 30 CHW Practitioner resources assigned to Kakamega wards
 - CHW visit Encounter resources linked to patients
-- 7 seeded demo scenarios (see spec section 8)
+- 7 seeded demo scenarios, recorded as ordinary clinical data (no flags)
 
-Output: data/fixtures/chw/ as FHIR bundles
+Output: data/fixtures/chw/ as FHIR bundles, plus data/fixtures/scenarios.json,
+the ground truth the evaluation scores briefings against
 """
 import json
 import os
@@ -164,20 +165,33 @@ def make_encounter(
     return enc
 
 
+CIEL = "https://cielterminology.org"
+# CIEL concepts the OpenMRS reference application ships with.
+TEMPERATURE       = "5088"    # Temperature (c)
+RESPIRATORY_RATE  = "5242"
+SYSTOLIC_BP       = "5085"
+CURRENTLY_PREGNANT = "1434"   # Boolean
+RETURN_VISIT_DATE = "5096"    # Date
+MALARIA           = "116128"  # Diagnosis
+
+
 def make_observation(patient_id: str, encounter_id: str, code: str, display: str,
-                     value: float, unit: str, dt: datetime, abnormal: bool = False) -> dict:
+                     dt: datetime, **value: Any) -> dict:
+    """`value` is one FHIR value[x] field, e.g. valueQuantity={...}."""
     return {
         "resourceType": "Observation",
         "id": fhir_id(),
         "status": "final",
-        "code": {"coding": [{"system": "http://loinc.org", "code": code, "display": display}]},
+        "code": {"coding": [{"system": CIEL, "code": code, "display": display}]},
         "subject": {"reference": f"Patient/{patient_id}"},
         "encounter": {"reference": f"Encounter/{encounter_id}"},
         "effectiveDateTime": ts(dt),
-        "valueQuantity": {"value": value, "unit": unit},
-        "interpretation": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
-                                        "code": "H" if abnormal else "N"}]}],
+        **value,
     }
+
+
+def quantity(value: float, unit: str) -> dict:
+    return {"value": round(value, 1), "unit": unit}
 
 
 def make_condition(patient_id: str, code: str, display: str, onset: datetime) -> dict:
@@ -185,117 +199,207 @@ def make_condition(patient_id: str, code: str, display: str, onset: datetime) ->
         "resourceType": "Condition",
         "id": fhir_id(),
         "clinicalStatus": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/condition-clinical", "code": "active"}]},
-        "code": {"coding": [{"system": "http://snomed.info/sct", "code": code, "display": display}]},
+        "code": {"coding": [{"system": CIEL, "code": code, "display": display}]},
         "subject": {"reference": f"Patient/{patient_id}"},
         "onsetDateTime": ts(onset),
     }
 
 
-def load_patient_ids(fixtures_dir: Path) -> list[str]:
-    ids = []
-    for path in (fixtures_dir / "localized").glob("*.json"):
+def load_patients(fixtures_dir: Path) -> list[dict]:
+    """Patient id, birth date, gender and whether Synthea marked them deceased."""
+    patients = []
+    for path in sorted((fixtures_dir / "localized").glob("*.json")):
         with open(path) as f:
             bundle = json.load(f)
         for entry in bundle.get("entry", []):
             r = entry.get("resource", {})
-            if r.get("resourceType") == "Patient" and r.get("id"):
-                ids.append(r["id"])
-    return ids
+            if r.get("resourceType") == "Patient":
+                patients.append({
+                    "id": r["id"],
+                    "birth": datetime.strptime(r["birthDate"], "%Y-%m-%d").replace(tzinfo=timezone.utc),
+                    "gender": r.get("gender"),
+                    "deceased": bool(r.get("deceasedDateTime") or r.get("deceasedBoolean")),
+                })
+    return patients
 
 
-def build_resources(patient_ids: list[str]) -> list[dict]:
-    resources: list[dict] = []
+def age_years(patient: dict, at: datetime) -> float:
+    return (at - patient["birth"]).days / 365.25
 
-    # Practitioner resources for all CHWs
-    for chw in CHWS:
-        resources.append(make_practitioner(chw))
 
-    # Distribute patients across CHWs (roughly equal)
-    chw_patients: dict[str, list[str]] = {chw["id"]: [] for chw in CHWS}
-    for i, pid in enumerate(patient_ids):
-        assigned = CHWS[i % len(CHWS)]
-        chw_patients[assigned["id"]].append(pid)
+def strip_location(enc: dict) -> None:
+    enc["extension"] = [
+        e for e in enc["extension"] if not e.get("url", "").endswith("geolocation")
+    ]
+
+
+def build_resources(patients: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Returns (FHIR resources, scenario manifest).
+
+    The manifest is the ground truth the evaluation scores briefings against:
+    each entry says what was planted and which ids a good briefing would name.
+    """
+    resources: list[dict] = [make_practitioner(chw) for chw in CHWS]
+    scenarios: list[dict] = []
+
+    living = [p for p in patients if not p["deceased"]]
+    deceased = [p for p in patients if p["deceased"]]
 
     mary   = CHWS[0]   # scenario 2: disengagement
     john   = CHWS[1]   # scenario 5: baseline trap
     grace  = CHWS[2]   # scenario 1: fever cluster (Lurambi)
 
-    # ── Regular visits (4 weeks, Mon–Fri, ~6-10 visits/day per CHW) ──────────
+    # Scenario 3 patients are picked first and kept out of routine visits, so
+    # their missed return date is not masked by a later visit.
+    anc_patients = random.sample(
+        [p for p in living if p["gender"] == "female" and 18 <= age_years(p, DEMO_WEEK_START) <= 40], 3
+    )
+    anc_ids = {p["id"] for p in anc_patients}
+
+    # Distribute the remaining living patients across CHWs (roughly equal)
+    chw_patients: dict[str, list[str]] = {chw["id"]: [] for chw in CHWS}
+    for i, p in enumerate(p for p in living if p["id"] not in anc_ids):
+        chw_patients[CHWS[i % len(CHWS)]["id"]].append(p["id"])
+
+    # ── Routine visits (4 weeks, Mon–Fri, ~6-10 visits/day per CHW) ──────────
+    demo_week_visits: list[dict] = []
     for week_offset in range(4):
         week_start = DEMO_WEEK_START - timedelta(weeks=3 - week_offset)
+        is_demo_week = week_offset == 3
         for day_offset in range(5):  # Mon–Fri
             visit_date = week_start + timedelta(days=day_offset)
             for chw in CHWS:
                 # Scenario 2: Mary stops Wed–Fri of demo week
-                is_demo_week = week_offset == 3
                 if chw["id"] == mary["id"] and is_demo_week and day_offset >= 2:
                     continue
-                # Scenario 5: John only gets data for last 4 days (Thu–Sun of demo week)
+                # Scenario 5: John only has data for Thu–Fri of demo week
                 if chw["id"] == john["id"] and not (is_demo_week and day_offset >= 3):
                     continue
 
                 patients_for_chw = chw_patients[chw["id"]]
                 daily_visits = random.randint(6, 10)
-                day_patients = random.sample(patients_for_chw, min(daily_visits, len(patients_for_chw)))
-
-                for pid in day_patients:
-                    hour = random.randint(8, 16)
-                    minute = random.randint(0, 59)
-                    visit_time = visit_date.replace(hour=hour, minute=minute)
-                    # Scenario 4: 14 visits with missing GPS across the demo week
-                    missing = is_demo_week and len([r for r in resources if r.get("resourceType") == "Encounter"
-                                                    and not any(e.get("url","").endswith("geolocation")
-                                                                for e in r.get("extension",[]))]) < 14
-                    enc = make_encounter(pid, chw, visit_time, missing_gps=missing and random.random() < 0.08)
+                for pid in random.sample(patients_for_chw, min(daily_visits, len(patients_for_chw))):
+                    visit_time = visit_date.replace(hour=random.randint(8, 16), minute=random.randint(0, 59))
+                    enc = make_encounter(pid, chw, visit_time)
                     resources.append(enc)
+                    if is_demo_week:
+                        demo_week_visits.append(enc)
+
+    scenarios.append({
+        "id": "chw_disengagement",
+        "title": "A CHW stopped visiting mid-week",
+        "expect": f"{mary['id']} ({mary['first']} {mary['last']}) logged visits on Monday and Tuesday of the "
+                  "latest week and none from Wednesday to Friday.",
+        "chw_ids": [mary["id"]],
+    })
+    scenarios.append({
+        "id": "baseline_trap",
+        "title": "A CHW with only two days of history",
+        "expect": f"{john['id']} ({john['first']} {john['last']}) has visits on only the last Thursday and Friday. "
+                  "The low 30-day total reflects a short history, not disengagement; a good briefing says so "
+                  "rather than ranking them as the worst performer.",
+        "chw_ids": [john["id"]],
+    })
 
     # ── Scenario 1: Fever cluster in Lurambi (8 cases in 5 days) ─────────────
-    lurambi_patients = random.sample(chw_patients[grace["id"]], min(8, len(chw_patients[grace["id"]])))
-    for i, pid in enumerate(lurambi_patients):
-        day = DEMO_WEEK_START + timedelta(days=i % 5)
-        enc = make_encounter(pid, grace, day.replace(hour=9 + i % 6), reason="Fever complaint")
-        fever_obs = make_observation(pid, enc["id"], "8310-5", "Body temperature", 38.5 + random.uniform(0, 1.2), "Cel", day, abnormal=True)
-        enc.setdefault("extension", []).append({"url": "http://community-health-ai/fever-cluster", "valueBoolean": True})
-        resources.extend([enc, fever_obs])
-        # Malaria condition for cluster patients
-        resources.append(make_condition(pid, "61462000", "Malaria", day - timedelta(days=1)))
+    cluster = random.sample(chw_patients[grace["id"]], 8)
+    for i, pid in enumerate(cluster):
+        day = (DEMO_WEEK_START + timedelta(days=i % 5)).replace(hour=9 + i % 6)
+        enc = make_encounter(pid, grace, day, reason="Fever complaint")
+        resources.append(enc)
+        resources.append(make_observation(
+            pid, enc["id"], TEMPERATURE, "Temperature (c)", day,
+            valueQuantity=quantity(38.5 + random.uniform(0, 1.2), "DEG C"),
+        ))
+        resources.append(make_condition(pid, MALARIA, "Malaria", day))
+    scenarios.append({
+        "id": "fever_cluster",
+        "title": "Fever cluster in one ward",
+        "expect": f"8 patients in {grace['ward']} ward had a temperature of 38.5 C or higher within five days, "
+                  f"all seen by {grace['id']}, each with a malaria diagnosis.",
+        "chw_ids": [grace["id"]],
+        "ward": grace["ward"],
+        "patient_ids": cluster,
+    })
 
     # ── Scenario 3: Overdue ANC — 3 pregnant patients, 1 with elevated BP ────
-    anc_patients = random.sample(patient_ids, 3)
-    for i, pid in enumerate(anc_patients):
-        chw = CHWS[i % len(CHWS)]
-        last_anc = DEMO_WEEK_START - timedelta(days=9 + i * 3)
-        enc = make_encounter(pid, chw, last_anc.replace(hour=10), reason="ANC follow-up",
-                             follow_up_flag=True)
-        enc["extension"].append({"url": "http://community-health-ai/anc-overdue", "valueBoolean": True})
+    for i, p in enumerate(anc_patients):
+        chw = CHWS[(i + 5) % len(CHWS)]
+        last_anc = (DEMO_WEEK_START - timedelta(days=9 + i * 3)).replace(hour=10)
+        enc = make_encounter(p["id"], chw, last_anc, reason="ANC follow-up", follow_up_flag=True)
         resources.append(enc)
-        resources.append(make_condition(pid, "77386006", "Pregnancy", last_anc - timedelta(weeks=20)))
+        resources.append(make_observation(
+            p["id"], enc["id"], CURRENTLY_PREGNANT, "Currently pregnant", last_anc, valueBoolean=True,
+        ))
+        resources.append(make_observation(
+            p["id"], enc["id"], RETURN_VISIT_DATE, "Return visit date", last_anc,
+            valueDateTime=ts(last_anc + timedelta(days=7)),
+        ))
         if i == 0:
-            # Elevated BP for first ANC patient
-            bp_obs = make_observation(pid, enc["id"], "8480-6", "Systolic blood pressure",
-                                      145.0, "mm[Hg]", last_anc, abnormal=True)
-            resources.append(bp_obs)
+            resources.append(make_observation(
+                p["id"], enc["id"], SYSTOLIC_BP, "Systolic blood pressure", last_anc,
+                valueQuantity=quantity(145.0, "mmHg"),
+            ))
+    scenarios.append({
+        "id": "overdue_anc",
+        "title": "Pregnant patients overdue for follow-up",
+        "expect": "3 pregnant patients missed their return visit date and have not been seen since. "
+                  "One of them had a systolic blood pressure of 145 at her last visit.",
+        "patient_ids": [p["id"] for p in anc_patients],
+        "high_bp_patient_id": anc_patients[0]["id"],
+    })
 
-    # ── Scenario 4: 3 visits with conflicting age (DOB mismatch) ─────────────
-    age_conflict_patients = random.sample(patient_ids, 3)
-    for pid in age_conflict_patients:
-        chw = random.choice(CHWS)
-        day = DEMO_WEEK_START + timedelta(days=random.randint(0, 4))
-        enc = make_encounter(pid, chw, day.replace(hour=11))
-        enc["extension"].append({"url": "http://community-health-ai/dq-age-conflict", "valueBoolean": True})
-        resources.append(enc)
+    # ── Scenario 4: 14 visits in the demo week with no location recorded ─────
+    unlocated = random.sample(demo_week_visits, 14)
+    for enc in unlocated:
+        strip_location(enc)
+    scenarios.append({
+        "id": "missing_location",
+        "title": "Visits with no location recorded",
+        "expect": "14 visits in the latest week were saved without a location.",
+        "count": 14,
+    })
 
-    # ── Scenario 7: IMCI danger sign — child with fever + fast breathing ──────
-    imci_patient = random.choice(patient_ids)
-    imci_chw = CHWS[4]
-    imci_day = DEMO_WEEK_START + timedelta(days=2, hours=14)
-    imci_enc = make_encounter(imci_patient, imci_chw, imci_day, reason="Child sick visit")
-    imci_enc["extension"].append({"url": "http://community-health-ai/imci-danger-sign", "valueBoolean": True})
-    fever   = make_observation(imci_patient, imci_enc["id"], "8310-5", "Body temperature", 39.1, "Cel", imci_day, abnormal=True)
-    breaths = make_observation(imci_patient, imci_enc["id"], "9279-1", "Respiratory rate",  62.0, "/min", imci_day, abnormal=True)
-    resources.extend([imci_enc, fever, breaths])
+    # ── Scenario 6: 3 visits logged after the patient's recorded death ───────
+    after_death = random.sample(deceased, 3)
+    after_death_chws = []
+    for p in after_death:
+        chw = random.choice(CHWS[5:])
+        day = DEMO_WEEK_START + timedelta(days=random.randint(0, 4), hours=11)
+        resources.append(make_encounter(p["id"], chw, day))
+        after_death_chws.append(chw["id"])
+    scenarios.append({
+        "id": "visits_after_death",
+        "title": "Visits logged for deceased patients",
+        "expect": "3 visits in the latest week were logged for patients whose death was recorded earlier.",
+        "count": 3,
+        "patient_ids": [p["id"] for p in after_death],
+        "chw_ids": after_death_chws,
+    })
 
-    return resources
+    # ── Scenario 7: child under five with fever and fast breathing ───────────
+    child = random.choice([p for p in living if age_years(p, DEMO_WEEK_START) < 5])
+    child_chw = CHWS[4]
+    child_day = DEMO_WEEK_START + timedelta(days=2, hours=14)
+    enc = make_encounter(child["id"], child_chw, child_day, reason="Child sick visit")
+    resources.append(enc)
+    resources.append(make_observation(
+        child["id"], enc["id"], TEMPERATURE, "Temperature (c)", child_day, valueQuantity=quantity(39.1, "DEG C"),
+    ))
+    resources.append(make_observation(
+        child["id"], enc["id"], RESPIRATORY_RATE, "Respiratory rate", child_day,
+        valueQuantity=quantity(62.0, "breaths/min"),
+    ))
+    scenarios.append({
+        "id": "child_danger_signs",
+        "title": "Child under five with danger signs",
+        "expect": f"A child under five seen by {child_chw['id']} had a temperature of 39.1 C and a respiratory "
+                  "rate of 62 breaths per minute, which needs urgent referral.",
+        "chw_ids": [child_chw["id"]],
+        "patient_ids": [child["id"]],
+    })
+
+    return resources, scenarios
 
 
 def bundle_resources(resources: list[dict]) -> dict:
@@ -323,15 +427,15 @@ def main() -> None:
         print("Localized FHIR data not found. Run localize.py first.")
         raise SystemExit(1)
 
-    print("Loading patient IDs from localized bundles...")
-    patient_ids = load_patient_ids(fixtures_dir)
-    if not patient_ids:
+    print("Loading patients from localized bundles...")
+    patients = load_patients(fixtures_dir)
+    if not patients:
         print("No patients found in localized bundles.")
         raise SystemExit(1)
-    print(f"Found {len(patient_ids)} patients.")
+    print(f"Found {len(patients)} patients.")
 
     print("Building CHW resources and seeded scenarios...")
-    resources = build_resources(patient_ids)
+    resources, scenarios = build_resources(patients)
 
     out_dir = fixtures_dir / "chw"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -346,10 +450,19 @@ def main() -> None:
         with open(out_path, "w") as f:
             json.dump(bundle, f, separators=(",", ":"))
 
+    (fixtures_dir / "scenarios.json").write_text(json.dumps({
+        "demo_week_start": DEMO_WEEK_START.strftime("%Y-%m-%d"),
+        "scenarios": scenarios,
+    }, indent=2))
+
     encounters = sum(1 for r in resources if r.get("resourceType") == "Encounter")
     observations = sum(1 for r in resources if r.get("resourceType") == "Observation")
     practitioners = sum(1 for r in resources if r.get("resourceType") == "Practitioner")
-    print(f"Done: {practitioners} CHWs, {encounters} encounters, {observations} observations")
+    conditions = sum(1 for r in resources if r.get("resourceType") == "Condition")
+    print(
+        f"Done: {practitioners} CHWs, {encounters} encounters, "
+        f"{observations} observations, {conditions} conditions, {len(scenarios)} scenarios"
+    )
     print(f"Written {len(chunks)} bundles to {out_dir}")
 
 
