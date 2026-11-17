@@ -49,7 +49,7 @@ export function Sidebar({
       </div>
 
       {/* Workspace nav */}
-      <div className="px-3">
+      <div className="sidebar-nav px-3">
         <div className="sidebar-label px-2 mb-2">
           Field desk
         </div>
@@ -58,6 +58,8 @@ export function Sidebar({
             <button
               key={n.id}
               onClick={() => onSelect(n.id)}
+              aria-label={n.label}
+              aria-current={active === n.id ? "page" : undefined}
               className={cn("nav-item", active === n.id && "nav-item--active")}
             >
               <span className="nav-icon">{n.icon}</span>
@@ -73,7 +75,7 @@ export function Sidebar({
       </div>
 
       {/* Observability */}
-      <div className="px-3 mt-6">
+      <div className="sidebar-systems px-3 mt-6">
         <div className="sidebar-label px-2 mb-2">
           Systems
         </div>

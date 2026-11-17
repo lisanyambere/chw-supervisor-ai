@@ -33,7 +33,7 @@ export function Composer({
   }
 
   return (
-    <div className="composer-dock max-w-[1040px] mx-auto px-8 pb-6 sticky bottom-0">
+    <div className="composer-dock w-full max-w-[1040px] mx-auto px-8 pb-6 sticky bottom-0">
       <div className="composer">
         <div className="flex items-end gap-3">
           <textarea

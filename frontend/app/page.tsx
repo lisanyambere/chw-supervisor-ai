@@ -7,6 +7,7 @@ import { Hero } from "@/components/Hero";
 import { Composer } from "@/components/Composer";
 import { AiTurn, UserTurn, type Turn } from "@/components/Conversation";
 import { ChwDrawer } from "@/components/ChwDrawer";
+import { ActivityView } from "@/components/ActivityView";
 import { getReady, streamBriefing } from "@/lib/api";
 import { EMPTY_TEAM, applyFrame } from "@/lib/team";
 
@@ -70,7 +71,8 @@ export default function HomePage() {
 
   // Re-pin whenever turns change and we were already at the bottom.
   useEffect(() => {
-    if (!pinnedRef.current) return;
+    // Nothing to follow yet: leave the empty state at its top.
+    if (!pinnedRef.current || turns.length === 0) return;
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
@@ -86,6 +88,8 @@ export default function HomePage() {
   function ask(q: string) {
     if (busy) return;
     setBusy(true);
+    // Answers render in the briefing view, wherever the question was asked.
+    setNav("brief");
     const userTurn: Turn = { id: uid(), role: "user", q, t: nowHHMM() };
     const aiId = uid();
     const placeholder: Turn = {
@@ -188,7 +192,9 @@ export default function HomePage() {
       <div className="main-stage flex flex-col overflow-hidden">
         <Topbar breadcrumb={`workspace / ${navLabel(nav)}`} />
         <main ref={scrollRef} onScroll={onScroll} className="content-scroll flex-1 overflow-y-auto">
-          {isEmpty ? (
+          {nav === "chart" ? (
+            <ActivityView />
+          ) : isEmpty ? (
             <Hero onAsk={ask} />
           ) : (
             <div className="pb-4">

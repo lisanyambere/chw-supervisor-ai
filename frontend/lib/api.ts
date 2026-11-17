@@ -174,6 +174,25 @@ export async function getChwDetail(
   return (await res.json()) as ChwDetail;
 }
 
+// ─── /activity/daily (activity chart) ───────────────────────────────────────
+
+export type DailyActivity = {
+  days: number;
+  series: DailyCount[]; // oldest first
+  total: number;
+};
+
+export async function getDailyActivity(
+  days: number,
+  opts: { signal?: AbortSignal } = {},
+): Promise<DailyActivity> {
+  const res = await fetch(`${BACKEND_URL}/activity/daily?days=${days}`, {
+    signal: opts.signal,
+  });
+  if (!res.ok) throw new Error(`Activity lookup failed: ${res.status}`);
+  return (await res.json()) as DailyActivity;
+}
+
 // ─── /briefing/stream (SSE) ─────────────────────────────────────────────────
 //
 // Mirrors backend/app/agents/briefing.py:StreamEvent. The wire format is
