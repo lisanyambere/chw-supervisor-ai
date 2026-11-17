@@ -85,6 +85,12 @@ class Settings(BaseSettings):
         default=30, alias="BRIEFING_DEFAULT_LOOKBACK_DAYS", ge=1, le=365
     )
 
+    # ── API ──────────────────────────────────────────────────────────────
+    # Comma-separated browser origins allowed to call the API.
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000", alias="CORS_ORIGINS"
+    )
+
     # ── LLM retry ────────────────────────────────────────────────────────
     # The openai SDK does its own exponential backoff and Retry-After handling;
     # we just configure how many attempts it makes (attempts = retries + 1).

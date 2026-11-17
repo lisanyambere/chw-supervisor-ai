@@ -67,15 +67,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Allow the Next.js dev server (and a future docker frontend) to call us
-# from the browser without bouncing through a proxy. The list is small and
-# explicit; production should override via an env var if needed.
+# Allow the Next.js frontend to call us from the browser without bouncing
+# through a proxy. Defaults to the dev server; override with CORS_ORIGINS.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=[o.strip() for o in get_settings().cors_origins.split(",")],
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
