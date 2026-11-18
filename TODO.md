@@ -12,9 +12,9 @@ See `docs/portfolio-handover.md` for the portfolio plan. Remaining, in order:
 - **Cut the formatting call.** Traces show the answer-card formatter takes
   about 18 s and a third of each briefing's cost. Have the lead analyst emit
   the card schema directly and keep the formatter as a fallback.
-- **Rate the judge.** Fill in `human_found` in
-  `docs/evals/2026-11-18-scenario-recall-ratings.csv`, then run
-  `python scripts/calibrate_judge.py score docs/evals/2026-11-18-scenario-recall-ratings.csv`.
+- **Cross-check the judge with other model families.** Needs a working
+  `OPENROUTER_API_KEY` in `.env` (the current one returns 401). Then run
+  `python scripts/calibrate_judge.py cross docs/evals/2026-11-18-scenario-recall-cost.json --model anthropic/claude-sonnet-5.5 --model google/gemini-3.8-flash`.
 
 ## Phase 4 — Supervisor frontend (in progress)
 
