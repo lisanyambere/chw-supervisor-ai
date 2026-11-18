@@ -48,6 +48,7 @@ from app.evaluators.recall import (  # noqa: E402
     judge_flags,
     judge_recall,
     mentions,
+    patient_names,
 )
 from app.evaluators.scorers import ungrounded_numbers  # noqa: E402
 from app.llm import get_llm, metered  # noqa: E402
@@ -55,16 +56,6 @@ from app.observability import get_langfuse  # noqa: E402
 
 QUESTION = "Give me the Monday-morning briefing for the team."
 FIXTURES = _REPO_ROOT / "data" / "fixtures"
-
-
-def _patient_names(patient_ids: set[str]) -> dict[str, str]:
-    names: dict[str, str] = {}
-    for path in sorted((FIXTURES / "localized").glob("*.json")):
-        for entry in json.loads(path.read_text())["entry"]:
-            r = entry["resource"]
-            if r["resourceType"] == "Patient" and r["id"] in patient_ids:
-                names[r["id"]] = r["name"][0]["text"]
-    return names
 
 
 async def _one_run(
@@ -241,19 +232,28 @@ def _cost_lines(runs: list[dict[str, Any]]) -> list[str]:
 
 def calibration_note() -> str:
     """The latest judge-vs-human agreement, if anyone has rated a sample."""
-    reports = sorted((_REPO_ROOT / "docs" / "evals").glob("*-judge-calibration.md"))
-    if not reports:
+    evals = _REPO_ROOT / "docs" / "evals"
+    human = sorted(evals.glob("*-judge-calibration.md"))
+    models = sorted(evals.glob("*-judge-agreement.md"))
+    if human:
+        return f"Its agreement with a human rater is in {human[-1].name}."
+    if models:
         return (
-            "It has not yet been checked against human ratings "
-            "(see scripts/calibrate_judge.py)."
+            f"It has been cross-checked against other model families, with decoy "
+            f"findings, in {models[-1].name}, but not against a human rater."
         )
-    return f"Its agreement with a human rater is in {reports[-1].name}."
+    return (
+        "It has not yet been checked against human ratings or other models "
+        "(see scripts/calibrate_judge.py)."
+    )
 
 
 async def _main(runs: int, push: bool, label: str) -> None:
     manifest = json.loads((FIXTURES / "scenarios.json").read_text())
     scenarios = manifest["scenarios"]
-    names = _patient_names({p for s in scenarios for p in s.get("patient_ids", [])})
+    names = patient_names(
+        FIXTURES / "localized", {p for s in scenarios for p in s.get("patient_ids", [])}
+    )
 
     # Sequential: each briefing already fans out to OpenMRS in parallel.
     results = [await _one_run(i + 1, scenarios, names, push) for i in range(runs)]

@@ -109,9 +109,15 @@ def _summarise_trace(trace: list["TraceEvent"], *, max_chars: int = 8000) -> str
 
 
 def _parse_judge_payload(raw: str) -> tuple[float, str]:
-    """Extract `(score, reason)` from a judge response, defensively."""
+    """Extract `(score, reason)` from a judge response, defensively.
+
+    Some models wrap JSON in a ```json fence even in JSON mode; the object
+    between the first "{" and the last "}" is what gets parsed.
+    """
+    text = raw or ""
+    start, end = text.find("{"), text.rfind("}")
     try:
-        data = json.loads(raw)
+        data = json.loads(text[start : end + 1] if 0 <= start < end else text)
     except (TypeError, ValueError):
         return 0.0, f"judge returned non-JSON: {raw[:120]!r}"
     score = data.get("score")

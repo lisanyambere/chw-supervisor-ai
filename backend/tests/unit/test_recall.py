@@ -1,4 +1,5 @@
 """Scenario-recall checks."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -47,3 +48,49 @@ async def test_judge_recall_is_binary_and_sees_patient_names() -> None:
     assert score.name == "recall_overdue_anc"
     assert score.value == 0.0
     assert "Amina Masinde, Nafula Kamau" in seen["user"]
+
+
+MANIFEST = [
+    {
+        **BASE,
+        "id": "chw_disengagement",
+        "chw_ids": ["chw-001"],
+        "expect": "chw-001 (Mary) logged visits on Monday and Tuesday of the week of "
+        "9 Nov and none from Wednesday to Friday.",
+    },
+    {**BASE, "id": "baseline_trap", "chw_ids": ["chw-002"]},
+    {**BASE, "id": "fever_cluster", "chw_ids": ["chw-003"], "ward": "Lurambi"},
+    {**BASE, "id": "missing_location", "count": 14},
+    {**BASE, "id": "visits_after_death", "count": 3, "chw_ids": ["chw-016"]},
+    {**BASE, "id": "child_danger_signs", "chw_ids": ["chw-005"]},
+]
+WARDS = {
+    "chw-001": "Lurambi",
+    "chw-002": "Lurambi",
+    "chw-003": "Lurambi",
+    "chw-004": "Butere",
+    "chw-005": "Mumias East",
+    "chw-016": "Butere",
+}
+
+
+def test_decoys_change_the_detail_each_finding_depends_on() -> None:
+    from app.evaluators.recall import decoys
+
+    by_id = {d["id"]: d["expect"] for d in decoys(MANIFEST, WARDS)}
+
+    # A CHW in no scenario, in the same week as the real disengagement.
+    assert by_id["decoy_wrong_chw_quiet"].startswith("chw-004 logged visits")
+    assert "the week of 9 Nov" in by_id["decoy_wrong_chw_quiet"]
+    # Neither the cluster's ward nor the sick child's.
+    assert "Butere ward" in by_id["decoy_wrong_ward_cluster"]
+    assert by_id["decoy_wrong_location_count"].startswith("20 visits")
+    assert by_id["decoy_wrong_death_count"].startswith("5 visits")
+
+
+def test_judge_reply_in_a_code_fence_still_parses() -> None:
+    from app.evaluators.judge import _parse_judge_payload
+
+    fenced = '```json\n{"score": 1, "reason": "states it"}\n```'
+    assert _parse_judge_payload(fenced) == (1.0, "states it")
+    assert _parse_judge_payload("no json here")[0] == 0.0
