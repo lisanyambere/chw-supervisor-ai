@@ -9,6 +9,10 @@ file is the ground truth. Two checks run against it:
   pass on a briefing that names the right CHW for the wrong reason.
 - `judge_recall` asks an LLM whether the briefing conveys the finding
   itself. It is the stricter of the two and the one reported as recall.
+
+`judge_flags` is the other direction: it lists every problem the briefing
+raises and matches each to a planted scenario, so flags that match none can
+be counted and reviewed as possible false alarms.
 """
 from __future__ import annotations
 
@@ -17,6 +21,7 @@ from typing import Any
 
 from app.evaluators.judge import JudgeFn, _default_judge_fn
 from app.evaluators.scorers import EvalScore
+from app.llm import get_llm
 
 Scenario = dict[str, Any]
 
@@ -90,6 +95,63 @@ async def judge_recall(
         1.0 if float(payload.get("score", 0.0)) >= 0.5 else 0.0,
         comment=str(payload.get("reason", "")),
     )
+
+
+_FLAGS_SYSTEM = """\
+You audit a briefing for a community health supervisor. You are given the
+briefing and a list of known findings, each with an id.
+
+List every distinct problem or concern the briefing raises — anything it asks
+the supervisor to act on or look into. Do not list routine context, such as
+team totals that the briefing does not call a problem. For each, give the id
+of the known finding it reports, or null if it matches none.
+
+Reply with one JSON object:
+{"flags": [{"flag": "<short description>", "finding": "<id or null>"}]}
+"""
+
+
+async def judge_flags(
+    briefing: str,
+    scenarios: list[Scenario],
+    *,
+    judge_fn: JudgeFn | None = None,
+) -> list[dict[str, Any]]:
+    """Each problem the briefing raises, with the planted scenario it matches
+    (`finding`), or None when it matches no planted scenario."""
+    judge_fn = judge_fn or _default_flags_fn
+    known = "\n".join(f"- {s['id']}: {s['expect']}" for s in scenarios)
+    payload = await judge_fn(
+        _FLAGS_SYSTEM, f"KNOWN FINDINGS:\n{known}\n\nBRIEFING:\n{briefing}"
+    )
+    ids = {s["id"] for s in scenarios}
+    flags = payload.get("flags")
+    if not isinstance(flags, list):
+        raise ValueError(f"flags judge returned no list: {payload!r:.200}")
+    return [
+        {
+            "flag": str(f.get("flag", "")),
+            # An id the judge invented counts as matching nothing.
+            "finding": f.get("finding") if f.get("finding") in ids else None,
+        }
+        for f in flags
+        if isinstance(f, dict)
+    ]
+
+
+async def _default_flags_fn(system: str, user: str) -> dict[str, Any]:
+    """JSON-mode call returning the whole object (the score judges' parser
+    only keeps `score` and `reason`)."""
+    llm = get_llm()
+    resp = await llm.chat(
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        response_format={"type": "json_object"},
+    )
+    data = json.loads(resp.choices[0].message.content or "{}")
+    return data if isinstance(data, dict) else {}
 
 
 def flatten_answer_doc(doc: dict[str, Any]) -> str:

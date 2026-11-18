@@ -11,6 +11,11 @@ Each run is scored three ways per scenario:
   on card  — the same deterministic check against the structured answer card
              the supervisor actually sees
 
+It also lists every problem each briefing raises and matches it to a planted
+scenario. Flags that match none are reported for review as possible false
+alarms. `scripts/calibrate_judge.py` checks the recall judge against a
+person's ratings.
+
 Usage (from repo root, OpenMRS seeded and .env set):
 
     python scripts/run_scenario_eval.py                # 3 runs
@@ -20,6 +25,7 @@ Usage (from repo root, OpenMRS seeded and .env set):
 
 Writes docs/evals/<date>-scenario-recall.md and .json.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -38,6 +44,7 @@ sys.path.insert(0, str(_REPO_ROOT / "backend"))
 from app.agents import format_answer, run_briefing  # noqa: E402
 from app.evaluators.recall import (  # noqa: E402
     flatten_answer_doc,
+    judge_flags,
     judge_recall,
     mentions,
 )
@@ -68,8 +75,9 @@ async def _one_run(
     doc = await format_answer(result, QUESTION)
     card_text = flatten_answer_doc(doc.to_dict())
 
-    judged = await asyncio.gather(
-        *(judge_recall(s, result.answer, names) for s in scenarios)
+    judged, flags = await asyncio.gather(
+        asyncio.gather(*(judge_recall(s, result.answer, names) for s in scenarios)),
+        judge_flags(result.answer, scenarios),
     )
     per_scenario = {
         s["id"]: {
@@ -90,8 +98,10 @@ async def _one_run(
         lf.flush()
 
     found = sum(v["judged"] for v in per_scenario.values())
+    unplanted = sum(f["finding"] is None for f in flags)
     print(
-        f"run {index}: {found}/{len(scenarios)} scenarios, {seconds:.0f}s, "
+        f"run {index}: {found}/{len(scenarios)} scenarios, "
+        f"{unplanted}/{len(flags)} flags unplanted, {seconds:.0f}s, "
         f"{result.tool_calls} tool calls, grounded={result.verification['grounded']}"
     )
     return {
@@ -104,6 +114,7 @@ async def _one_run(
         "verification": result.verification,
         "card_ungrounded_numbers": ungrounded_numbers(card_text, result.trace),
         "scenarios": per_scenario,
+        "flags": flags,
         "answer": result.answer,
     }
 
@@ -140,6 +151,18 @@ def _report(
         f"| **All scenarios** | **{totals['judged']}/{possible}** "
         f"| **{totals['named']}/{possible}** | **{totals['on_card']}/{possible}** |",
         "",
+        "## Flags outside the planted set",
+        "",
+        f"- Problems raised per briefing: "
+        f"{mean(len(r['flags']) for r in runs):.1f} on average",
+        f"- Matching a planted scenario: "
+        f"{sum(f['finding'] is not None for r in runs for f in r['flags'])} of "
+        f"{sum(len(r['flags']) for r in runs)}",
+        "- The rest are listed under *Unplanted flags* below. Each is either a "
+        "real feature of the generated data that nobody planted or a false alarm; "
+        "the grounding check shows its figures came from the data, so telling the "
+        "two apart takes a human read.",
+        "",
         "## Grounding and cost",
         "",
         f"- Answers that passed the grounding check: "
@@ -158,14 +181,13 @@ def _report(
         "## What this measures, and what it does not",
         "",
         "- **Judged found** is recall against planted ground truth: the judge is told "
-        "the finding and asked whether the briefing conveys it. It does not measure "
-        "false alarms — a briefing that also reports things that are not there is "
-        "not penalised here.",
+        "the finding and asked whether the briefing conveys it.",
+        "- **Flags outside the planted set** bound the false alarms from above: a "
+        "flag matching no planted scenario may still be true of the data.",
         "- **Named** columns are a deterministic lower bar (the right ids, wards and "
         "patient names appear). They can pass when the briefing names the right "
         "person for the wrong reason, which is why the judge is the headline.",
-        "- The judge is the same model that wrote the briefing and has not been "
-        "calibrated against human ratings.",
+        "- The judge is the same model that wrote the briefing. " + calibration_note(),
         "- The grounding check proves a figure appears in some tool result, not that "
         "it is attached to the right entity.",
         "- The data is synthetic and the scenarios were planted by the same project "
@@ -182,7 +204,23 @@ def _report(
         if not r["scenarios"][s["id"]]["judged"]
     ]
     lines += misses or ["None."]
+    lines += ["", "## Unplanted flags", ""]
+    unplanted = sorted(
+        {f["flag"] for r in runs for f in r["flags"] if f["finding"] is None}
+    )
+    lines += [f"- {f}" for f in unplanted] or ["None."]
     return "\n".join(lines) + "\n"
+
+
+def calibration_note() -> str:
+    """The latest judge-vs-human agreement, if anyone has rated a sample."""
+    reports = sorted((_REPO_ROOT / "docs" / "evals").glob("*-judge-calibration.md"))
+    if not reports:
+        return (
+            "It has not yet been checked against human ratings "
+            "(see scripts/calibrate_judge.py)."
+        )
+    return f"Its agreement with a human rater is in {reports[-1].name}."
 
 
 async def _main(runs: int, push: bool, label: str) -> None:
