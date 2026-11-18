@@ -120,6 +120,42 @@
           "unit": "cps"
         }
       }
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM tokens per minute by kind",
+      "id": 6,
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (kind) (rate(llm_tokens_total[5m])) * 60",
+          "refId": "A",
+          "legendFormat": "{{kind}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Estimated LLM spend in range (USD)",
+      "description": "Tokens in the selected range at $5 per million input and $30 per million output tokens: gpt-5.5 in Langfuse's price table, matching LLM_PRICE_* in the backend. Change both together.",
+      "id": 7,
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "(sum(increase(llm_tokens_total{kind=\"input\"}[$__range])) * 5 + sum(increase(llm_tokens_total{kind=\"output\"}[$__range])) * 30) / 1e6",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 2 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none" }
     }
   ],
   "refresh": "10s",
@@ -132,6 +168,6 @@
   "timezone": "browser",
   "title": "Community Health AI — Backend Overview",
   "uid": "cha-ai-backend",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
