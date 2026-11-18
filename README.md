@@ -63,10 +63,13 @@ The graph is in `backend/app/agents/graph.py`. The frontend streams each step.
 The data generator plants seven scenarios (a fever cluster, a CHW who stops
 mid-week, overdue pregnancy follow-ups, and so on) and records them in
 `data/fixtures/scenarios.json`. `scripts/run_scenario_eval.py` runs the full
-briefing several times and scores how many each briefing surfaces. Latest
-run: **31 of 35** scenario findings judged conveyed over five runs, every
-answer passing the grounding check, about 28 s per briefing. Reports, with
-what the numbers do and do not show, are in [`docs/evals/`](docs/evals/).
+briefing several times, scores how many planted findings each briefing
+conveys, and lists anything it flags beyond them. Latest run: **35 of 35**
+findings conveyed over five runs, 36 of 37 problems raised matching a planted
+finding, every answer passing the grounding check, about 24 s per briefing.
+`scripts/calibrate_judge.py` checks the judge against a person's ratings.
+Reports, with what the numbers do and do not show, are in
+[`docs/evals/`](docs/evals/).
 
 ---
 

@@ -39,19 +39,20 @@ The backend is FastAPI and streams each step to a Next.js frontend as it happens
 
 ## Evaluation
 
-Because the seven situations were planted, I know what a good briefing should contain, so I can measure whether it does. The evaluation runs the full briefing five times and asks a separate model, given each known finding, whether the briefing conveys it.
+Because the seven situations were planted, I know what a good briefing should contain, so I can measure whether it does. The evaluation runs the full briefing five times. For each planted finding, a separate model call is told the finding and asked whether the briefing conveys it. Another lists every problem the briefing raises and matches each to a planted finding, so anything it flags beyond them can be counted and read.
 
 Latest run (gpt-5.5 on Azure, five runs):
 
-- **31 of 35** planted findings conveyed. Six of the seven were caught in every run.
-- **5 of 5** briefings passed the figure check, checking about 75 figures each.
-- About 28 seconds and 8 model calls per briefing.
+- **35 of 35** planted findings conveyed: all seven in every run.
+- **36 of 37** problems raised matched a planted finding. The other was a suggestion to spot-check the busiest CHWs' records, which is a judgement call rather than a wrong figure.
+- **5 of 5** briefings passed the figure check, about 80 figures each.
+- About 24 seconds, 8 model calls and 7 tool calls per briefing.
 
-The first version scored 18 of 21 over three runs. Reading the misses showed the lead analyst dropping lower-priority findings to stay within its bullet limit. One instruction (combine findings rather than drop them) fixed most of it. The remaining miss is consistent: the briefing reports 14 visits with no location but cannot say they happened this week, because that tool reports how many, not when. It is the next fix.
+It did not start there. The first version scored 18 of 21 over three runs. Reading the misses showed the lead analyst dropping lower-priority findings to stay within its bullet limit; one instruction (combine findings rather than drop them) took it to 31 of 35. The remaining miss was always the same: the briefing reported 14 visits with no location but could not say they were recent, because the tool returned how many, not when. I changed the tool to break them down by week, and named the week in that finding's description instead of "the latest week", which gave 35 of 35.
 
 Building the evaluation also exposed bugs the agents could not have shown me. The data loader had been silently discarding most of the planted situations, so an earlier version of the agent could only ever count visits. And OpenMRS reads "before 14 November" as "before the end of 14 November", which double-counted visits in the daily totals.
 
-What these numbers do not show: they measure whether real findings are caught, not false alarms. The judge is the same model as the agents and has not been checked against human ratings. The figure check proves a number came from the data, not that it is attached to the right person. And the data and the planted situations come from the same project as the tools.
+What these numbers do not show: five runs over seven planted situations is a small sample, and every planted situation is one the tools were built to find. The judge is the same model as the agents and has not yet been checked against my own ratings; the project includes a rating sheet and a script that reports agreement once I have filled it in. The figure check proves a number came from the data, not that it is attached to the right person.
 
 ## Observability
 
@@ -61,13 +62,12 @@ Every briefing is traced in Langfuse: one span per agent, every model call with 
 
 - **Synthetic data only.** No real patients, and nothing here has been validated clinically or with real supervisors.
 - **Planted findings, not real ones.** The evaluation shows the pipeline catches what it was designed to catch. It says nothing about situations nobody planted.
-- **Recall only.** False alarms are not yet measured, and the judge has not been calibrated against people.
+- **A small, friendly evaluation.** Five runs, seven planted situations, and a judge not yet checked against a person.
 - **Not deployed.** OpenMRS alone takes 10–15 minutes to start, so the system runs locally and is shown here as a recording.
 - **Supervisor-facing, not clinical.** It tells a supervisor whom to call. It does not diagnose, and every flagged record is meant to be confirmed in OpenMRS first.
 
 ## What's next
 
-- Give the location check a date, so the briefing can say the unlocated visits are recent.
-- Add a false-alarm measure, and calibrate the judge against a sample I rate by hand.
-- Remember the conversation, so follow-up questions build on the briefing.
+- Rate a sample of briefings myself and report how often the judge agrees.
+- Plant situations the tools were not built for, to see what the agents miss.
 - Package it to run with one command, then try it with someone who supervises CHWs.

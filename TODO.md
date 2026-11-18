@@ -9,26 +9,25 @@ See `docs/portfolio-handover.md` for the portfolio plan. Remaining, in order:
 
 - **Record the video and screenshots** (re-seed first so the demo week is current).
 - **Draft the case-study text.**
-- **Tell the supervisor when unlocated visits happened.** The scenario eval's
-  one consistent miss: `visits_missing_location` reports how many, not which
-  week, so the briefing cannot say they are recent.
-- **Calibrate the recall judge** against a human rating of a sample, and add
-  a false-alarm measure; the eval currently scores recall only.
+- **Rate the judge.** Fill in `human_found` in
+  `docs/evals/2026-11-18-scenario-recall-ratings.csv`, then run
+  `python scripts/calibrate_judge.py score docs/evals/2026-11-18-scenario-recall-ratings.csv`.
 
 ## Phase 4 — Supervisor frontend (in progress)
 
 - [x] **SSE streaming** — `/briefing/stream` emits `tool_start` / `tool_done` /
   `response` events, frontend EventSource wired, plan timeline ticks live.
   Trace id + answer_doc included in final frame. (commits ba4656c, d7c6432, 41a8624)
-- [ ] **Conversation persistence** — drop the reducer into localStorage (start)
-  or Postgres so reloads don't wipe history.
+- [x] **Conversation persistence** — saved in localStorage; a reload closes
+  any run it interrupted.
 - [x] **CHW detail drawer** — opened by any `chw-NNN` chip or ranked row,
   backed by `GET /chws/{chw_id}`.
 - [x] **Briefing-team timeline** — router, one lane per specialist, lead
   analyst and the grounding check, streamed live.
 - [x] **Activity charts view** — 30-day chart backed by `GET /activity/daily`,
   weekends muted, missed weekdays marked, table view.
-- [ ] **CHW roster view** — full 30-row reuse of the ranked-row pattern.
+- [x] **CHW roster view** — backed by `GET /chws`, gaps in working pattern first.
+- [x] **Anomalies view** — backed by `GET /anomalies`, no model in the loop.
 - [ ] **Frontend test infrastructure** — vitest + @testing-library/react. Zero
   tests today. At minimum cover `postBriefing` error path, Composer busy
   state, error fallback UI.
@@ -95,8 +94,6 @@ See `docs/portfolio-handover.md` for the portfolio plan. Remaining, in order:
 - The seeded demo week is the latest complete week before the day the data
   was generated (currently 9–15 Nov 2026). Tools look back from today, so
   re-seed (`down -v`, then `scripts/seed.sh`) shortly before recording.
-- Six tests in `tests/unit/test_llm_client.py` fail with connection errors:
-  the installed openai SDK no longer goes through the transport respx mocks.
 
 ## Recently shipped (for context — last 24h)
 
