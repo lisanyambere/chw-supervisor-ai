@@ -9,6 +9,9 @@ See `docs/portfolio-handover.md` for the portfolio plan. Remaining, in order:
 
 - **Record the video and screenshots** (re-seed first so the demo week is current).
 - **Draft the case-study text.**
+- **Cut the formatting call.** Traces show the answer-card formatter takes
+  about 18 s and a third of each briefing's cost. Have the lead analyst emit
+  the card schema directly and keep the formatter as a fallback.
 - **Rate the judge.** Fill in `human_found` in
   `docs/evals/2026-11-18-scenario-recall-ratings.csv`, then run
   `python scripts/calibrate_judge.py score docs/evals/2026-11-18-scenario-recall-ratings.csv`.

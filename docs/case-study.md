@@ -43,10 +43,10 @@ Because the seven situations were planted, I know what a good briefing should co
 
 Latest run (gpt-5.5 on Azure, five runs):
 
-- **35 of 35** planted findings conveyed: all seven in every run.
-- **36 of 37** problems raised matched a planted finding. The other was a suggestion to spot-check the busiest CHWs' records, which is a judgement call rather than a wrong figure.
+- **35 of 35** planted findings conveyed: all seven in every run, as in the run before it.
+- **35 of 38** problems raised matched a planted finding. The other three were judgement calls, not wrong figures: two suggestions to check how evenly work is spread, and a note that the feverish child had no malaria test recorded, which is true.
 - **5 of 5** briefings passed the figure check, about 80 figures each.
-- About 24 seconds, 8 model calls and 7 tool calls per briefing.
+- Per briefing: about 23 seconds of agent time, 9 model calls, 7 tool calls, and **$0.23** in model costs ($0.20–$0.26). The whole five-run evaluation, judges included, cost $1.64.
 
 It did not start there. The first version scored 18 of 21 over three runs. Reading the misses showed the lead analyst dropping lower-priority findings to stay within its bullet limit; one instruction (combine findings rather than drop them) took it to 31 of 35. The remaining miss was always the same: the briefing reported 14 visits with no location but could not say they were recent, because the tool returned how many, not when. I changed the tool to break them down by week, and named the week in that finding's description instead of "the latest week", which gave 35 of 35.
 
@@ -54,9 +54,13 @@ Building the evaluation also exposed bugs the agents could not have shown me. Th
 
 What these numbers do not show: five runs over seven planted situations is a small sample, and every planted situation is one the tools were built to find. The judge is the same model as the agents and has not yet been checked against my own ratings; the project includes a rating sheet and a script that reports agreement once I have filled it in. The figure check proves a number came from the data, not that it is attached to the right person.
 
-## Observability
+## Observability and cost
 
-Every briefing is traced in Langfuse: one span per agent, every model call with its token usage, and every tool call with its inputs and outputs. Evaluation scores are attached to the same trace, so a miss can be followed back to the exact step that caused it. The backend also exports Prometheus metrics for request, tool and model-call latency, shown on a Grafana dashboard, and separates "the service is up" from "OpenMRS and the model are reachable" in its health checks.
+Every briefing is traced in Langfuse: one span per agent, every model call with its tokens and cost, and every tool call with its inputs and outputs. Evaluation scores are attached to the same trace, so a miss can be followed back to the exact step that caused it. One demo trace is public, so it opens without a Langfuse account: https://us.cloud.langfuse.com/project/cmsqgs40101crad0dn7qvoxbi/traces/07b9b8daa51bb6461105d791ef3e6cd2
+
+The app meters its own model usage too. Each briefing shows its model calls, tokens and estimated cost under the agents' timeline, and its estimate matches what Langfuse charged for the same run. The backend exports token counts and request, tool and model latency to Prometheus, and a Grafana dashboard turns them into token rates and estimated spend. Health checks separate "the service is up" from "OpenMRS and the model are reachable".
+
+The traces changed the design. The timeline shows the three specialists running side by side (about 11 seconds), then the lead analyst (about 11 seconds), then the call that reformats the answer into the on-screen card: about 18 seconds and $0.08, a third of the briefing's cost, for work that changes no facts. That makes the formatter the first thing to cut, by having the lead analyst write the card's structure directly.
 
 ## Limitations
 
@@ -68,6 +72,7 @@ Every briefing is traced in Langfuse: one span per agent, every model call with 
 
 ## What's next
 
+- Have the lead analyst write the answer card directly, removing the formatting call that costs a third of each briefing.
 - Rate a sample of briefings myself and report how often the judge agrees.
 - Plant situations the tools were not built for, to see what the agents miss.
 - Package it to run with one command, then try it with someone who supervises CHWs.

@@ -71,6 +71,17 @@ finding, every answer passing the grounding check, about 24 s per briefing.
 Reports, with what the numbers do and do not show, are in
 [`docs/evals/`](docs/evals/).
 
+### Cost and traces
+
+Each briefing costs about **$0.23** in model calls (9 calls, roughly 11k input
+and 6k output tokens at gpt-5.5 prices). The app shows each run's calls,
+tokens and estimated cost; the backend exports token counts to Prometheus and
+Grafana charts token rate and spend. Every run is traced in Langfuse, and
+[one demo trace is public](https://us.cloud.langfuse.com/project/cmsqgs40101crad0dn7qvoxbi/traces/07b9b8daa51bb6461105d791ef3e6cd2).
+`scripts/export_traces.py` pulls traces and their costs into
+[`docs/evidence/`](docs/evidence/). Set `LANGFUSE_PUBLIC_TRACES=true` (synthetic
+data only) to make new traces public, and `LLM_PRICE_*` to your own prices.
+
 ---
 
 ## Running services (phase 0)
