@@ -165,7 +165,8 @@ def main() -> None:
         "Langfuse's, from its own model price table.",
         "",
         f"- Briefings: {len(rows)}",
-        f"- Latency: {median(r['seconds'] for r in rows):.1f}s median, "
+        f"- Agent time (router to verified answer, before the answer card is "
+        f"formatted): {median(r['seconds'] for r in rows):.1f}s median, "
         f"{max(r['seconds'] for r in rows):.1f}s slowest",
         f"- Per briefing: {avg('model_calls'):.1f} model calls, "
         f"{avg('tool_calls'):.1f} tool calls, {avg('input_tokens'):,.0f} input and "
@@ -173,7 +174,7 @@ def main() -> None:
         f"- Cost per briefing: ${avg('cost_usd'):.3f} on average "
         f"(${min(costs):.3f}–${max(costs):.3f}); ${sum(costs):.2f} in total",
         "",
-        "| Trace | Started (UTC) | Seconds | Model calls | Tool calls "
+        "| Trace | Started (UTC) | Agent seconds | Model calls | Tool calls "
         "| Tokens in / out | Cost |",
         "|---|---|---|---|---|---|---|",
         *(
