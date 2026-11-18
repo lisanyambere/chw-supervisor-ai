@@ -18,6 +18,7 @@ from starlette.responses import Response
 from app.agents import BriefingResult, StreamEvent, format_answer, run_briefing
 from app.api.schemas import (
     AgentRunOut,
+    AnomaliesResponse,
     AnswerDocOut,
     BriefingRequest,
     BriefingResponse,
@@ -27,6 +28,8 @@ from app.api.schemas import (
     LivenessResponse,
     PlanStepOut,
     ReadinessResponse,
+    RosterResponse,
+    RosterRow,
     TraceEntry,
 )
 from app.core import configure_logging, get_logger, get_settings
@@ -35,7 +38,19 @@ from app.llm import get_llm
 from app.observability import aflush as langfuse_flush
 from app.observability import get_langfuse, langfuse_project_url, metrics_router
 from app.observability.metrics import REQUEST_LATENCY
-from app.tools.chw import chw_patient_panel, count_chw_encounters, visits_by_day
+from app.tools._shared import gather_bounded
+from app.tools.chw import (
+    chw_activity_gaps,
+    chw_patient_panel,
+    count_chw_encounters,
+    visits_by_day,
+)
+from app.tools.clinical import (
+    child_danger_signs,
+    fever_cases_by_ward,
+    overdue_followups,
+)
+from app.tools.quality import visits_after_death, visits_missing_location
 
 log = get_logger(__name__)
 
@@ -233,6 +248,88 @@ def _practitioner_name(practitioner: dict[str, Any]) -> str | None:
         if joined:
             return joined
     return None
+
+
+# A fever "cluster" for the anomalies view: this many cases in one ward.
+FEVER_CLUSTER_MIN_CASES = 3
+
+
+@app.get("/chws", response_model=RosterResponse)
+async def roster(fhir: FhirClient = Depends(get_fhir)) -> RosterResponse:
+    idmap = get_id_map()
+
+    async def _row(chw_id: str, uuid: str) -> RosterRow:
+        practitioner, month, week = await asyncio.gather(
+            fhir.read("Practitioner", uuid),
+            count_chw_encounters(fhir, chw_id, days=30),
+            visits_by_day(fhir, days=7, chw_id=chw_id),
+        )
+        return RosterRow(
+            chw_id=chw_id,
+            name=_practitioner_name(practitioner),
+            ward=idmap.chw_wards.get(chw_id),
+            encounters_30d=month["encounter_count"],
+            encounters_7d=week["stats"]["total"],
+        )
+
+    try:
+        rows, gaps = await asyncio.gather(
+            gather_bounded(
+                _row(chw_id, uuid)
+                for chw_id, uuid in sorted(idmap.practitioners.items())
+            ),
+            chw_activity_gaps(fhir, days=14),
+        )
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"upstream: {e}") from e
+
+    by_id = {g["chw_id"]: g for g in gaps["rows"]}
+    for row in rows:
+        if gap := by_id.get(row.chw_id):
+            row.pattern = gap["pattern"]
+            row.last_active = gap["last_active"]
+    return RosterResponse(chws=rows)
+
+
+@app.get("/anomalies", response_model=AnomaliesResponse)
+async def anomalies(
+    days: int = Query(14, ge=7, le=90),
+    fhir: FhirClient = Depends(get_fhir),
+) -> AnomaliesResponse:
+    try:
+        fevers, children, overdue, gaps, unlocated, after_death = await asyncio.gather(
+            fever_cases_by_ward(fhir, days=days),
+            child_danger_signs(fhir, days=days),
+            overdue_followups(fhir, days=max(days, 60)),
+            chw_activity_gaps(fhir, days=days),
+            visits_missing_location(fhir, days=days),
+            visits_after_death(fhir, days=days),
+        )
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"upstream: {e}") from e
+
+    # A ward name, not "(no location recorded)": an outbreak needs a place.
+    wards = get_id_map().wards
+    clusters = [
+        w
+        for w in fevers["rows"]
+        if w["case_count"] >= FEVER_CLUSTER_MIN_CASES and w["ward"] in wards
+    ]
+    return AnomaliesResponse(
+        days=days,
+        action_count=(
+            len(clusters)
+            + len(children["children"])
+            + len(overdue["patients"])
+            + len(gaps["rows"])
+        ),
+        fever_clusters=clusters,
+        children=children["children"],
+        overdue=overdue["patients"],
+        activity_gaps=gaps,
+        missing_location=unlocated,
+        visits_after_death=after_death,
+    )
 
 
 @app.get("/activity/daily", response_model=DailyActivityResponse)

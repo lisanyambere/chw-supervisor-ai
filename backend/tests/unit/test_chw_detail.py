@@ -85,3 +85,49 @@ def test_chw_detail_unknown_id_is_404(client: TestClient) -> None:
     resp = client.get("/chws/chw-999")
 
     assert resp.status_code == 404
+
+
+def test_roster_lists_every_chw_with_profile_and_counts(client: TestClient) -> None:
+    resp = client.get("/chws")
+
+    assert resp.status_code == 200
+    [row] = resp.json()["chws"]
+    assert row["chw_id"] == "chw-001"
+    assert row["name"] == "Mary Wanjiku"
+    assert row["ward"] == "Lurambi"
+    assert row["encounters_30d"] == 12
+    assert row["encounters_7d"] == 21
+
+
+def test_anomalies_counts_what_needs_action_today(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def returns(value: dict[str, Any]) -> Any:
+        async def tool(_fhir: Any, **_kwargs: Any) -> dict[str, Any]:
+            return value
+
+        return tool
+
+    fevers = {
+        "rows": [
+            {"ward": "Lurambi", "case_count": 8},
+            {"ward": "Lurambi-adjacent", "case_count": 5},  # not a known ward
+            {"ward": "(no location recorded)", "case_count": 4},
+            {"ward": "Butere", "case_count": 1},  # too few for a cluster
+        ]
+    }
+    monkeypatch.setattr(
+        api_main.get_id_map(), "wards", {"Lurambi": "loc-1", "Butere": "loc-2"}
+    )
+    monkeypatch.setattr(api_main, "fever_cases_by_ward", returns(fevers))
+    monkeypatch.setattr(api_main, "child_danger_signs", returns({"children": [{}]}))
+    monkeypatch.setattr(api_main, "overdue_followups", returns({"patients": [{}, {}]}))
+    monkeypatch.setattr(api_main, "chw_activity_gaps", returns({"rows": [{}]}))
+    monkeypatch.setattr(api_main, "visits_missing_location", returns({"rows": []}))
+    monkeypatch.setattr(api_main, "visits_after_death", returns({"rows": [{}]}))
+
+    body = client.get("/anomalies").json()
+
+    assert [w["ward"] for w in body["fever_clusters"]] == ["Lurambi"]
+    # 1 cluster + 1 child + 2 overdue + 1 CHW; data-quality records excluded.
+    assert body["action_count"] == 5

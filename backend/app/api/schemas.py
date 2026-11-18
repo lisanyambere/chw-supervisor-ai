@@ -115,6 +115,41 @@ class DailyCount(BaseModel):
     encounter_count: int
 
 
+class RosterRow(BaseModel):
+    chw_id: str
+    name: str | None = None
+    ward: str | None = None
+    encounters_30d: int
+    encounters_7d: int
+    # From chw_activity_gaps over 14 days: "stopped_early", "started_late",
+    # "no_visits", or None when the CHW keeps the team's working pattern.
+    pattern: str | None = None
+    last_active: str | None = None
+
+
+class RosterResponse(BaseModel):
+    chws: list[RosterRow]
+
+
+class AnomaliesResponse(BaseModel):
+    """What needs a supervisor's attention, straight from the tools (no model).
+
+    Each field is the named tool's output over `days` (overdue follow-ups use
+    a longer window, since a missed return date can be weeks old).
+    `action_count` counts what needs someone today: fever clusters, children
+    with danger signs, overdue patients and CHWs out of step with the team.
+    """
+
+    days: int
+    action_count: int
+    fever_clusters: list[dict[str, Any]]
+    children: list[dict[str, Any]]
+    overdue: list[dict[str, Any]]
+    activity_gaps: dict[str, Any]
+    missing_location: dict[str, Any]
+    visits_after_death: dict[str, Any]
+
+
 class DailyActivityResponse(BaseModel):
     """Team-wide encounters per day, for the activity chart."""
 
