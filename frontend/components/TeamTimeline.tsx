@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, Check, ShieldCheck } from "lucide-react";
+import type { Usage } from "@/lib/api";
 import { AGENT_LABELS, type Lane, type TeamRun } from "@/lib/team";
 import { cn } from "@/lib/cn";
 
@@ -18,8 +19,11 @@ export function TeamTimeline({ team }: { team: TeamRun }) {
         <div>Briefing team</div>
         <div>
           {team.done ? (
-            <span className="text-[var(--ok)]">
-              specialists done in {(totalMs / 1000).toFixed(1)}s
+            <span className="team-head__done">
+              <span className="text-[var(--ok)]">
+                specialists done in {(totalMs / 1000).toFixed(1)}s
+              </span>
+              {team.usage && <UsageNote usage={team.usage} />}
             </span>
           ) : (
             <span className="flex items-center gap-2 text-[var(--accent-ink)]">
@@ -137,6 +141,19 @@ function VerificationRow({ team }: { team: TeamRun }) {
         )}
       </div>
     </div>
+  );
+}
+
+export function UsageNote({ usage }: { usage: Usage }) {
+  const tokens = usage.input_tokens + usage.output_tokens;
+  return (
+    <span
+      className="team-usage"
+      title={`${usage.input_tokens.toLocaleString()} input + ${usage.output_tokens.toLocaleString()} output tokens`}
+    >
+      {usage.calls} model calls · {(tokens / 1000).toFixed(1)}k tokens
+      {usage.cost_usd !== null && ` · ≈ $${usage.cost_usd.toFixed(2)}`}
+    </span>
   );
 }
 

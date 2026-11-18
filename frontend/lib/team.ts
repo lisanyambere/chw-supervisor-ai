@@ -3,7 +3,7 @@
  * each is doing, and whether the final answer passed the grounding check.
  * `applyFrame` folds one SSE frame into that state.
  */
-import type { PlanStep, StreamFrame, Verification } from "@/lib/api";
+import type { PlanStep, StreamFrame, Usage, Verification } from "@/lib/api";
 
 export const AGENT_LABELS: Record<string, string> = {
   team: "Team activity",
@@ -28,6 +28,8 @@ export type TeamRun = {
   /** The first draft failed the grounding check and is being rewritten. */
   revising: boolean;
   done: boolean;
+  /** Tokens and cost of the whole run, once it has finished. */
+  usage: Usage | null;
 };
 
 export const EMPTY_TEAM: TeamRun = {
@@ -37,6 +39,7 @@ export const EMPTY_TEAM: TeamRun = {
   verification: null,
   revising: false,
   done: false,
+  usage: null,
 };
 
 function patchLane(
@@ -112,6 +115,7 @@ export function applyFrame(team: TeamRun, frame: StreamFrame): TeamRun {
         })),
         revising: false,
         done: true,
+        usage: frame.usage ?? null,
       };
     case "error":
       return { ...team, revising: false, done: true };

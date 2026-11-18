@@ -70,6 +70,35 @@ describe("applyFrame", () => {
     expect(settled.verification?.grounded).toBe(true);
   });
 
+  it("keeps the run's usage from the response frame", () => {
+    const usage = {
+      calls: 9,
+      input_tokens: 12000,
+      cached_input_tokens: 0,
+      output_tokens: 3400,
+      reasoning_tokens: 1200,
+      cost_usd: 0.162,
+    };
+    const team = run([
+      { kind: "route", agents: ["team"] },
+      {
+        kind: "response",
+        answer: "",
+        iterations: 3,
+        tool_calls: 0,
+        plan: [],
+        trace_id: null,
+        answer_doc: null,
+        route: ["team"],
+        route_reason: "",
+        agents: [],
+        verification: {},
+        usage,
+      },
+    ]);
+    expect(team.usage).toEqual(usage);
+  });
+
   it("stops revising once the one allowed rewrite also fails", () => {
     const team = run([
       {

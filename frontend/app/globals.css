@@ -574,6 +574,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   letter-spacing: .07em;
 }
 .team-head > :last-child { text-transform: none; letter-spacing: 0; }
+.team-head__done { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 14px; }
+.team-usage { color: var(--ink-2); }
 .team-stage {
   display: grid; grid-template-columns: 18px 1fr; gap: 12px; align-items: center;
   padding: 10px 14px;

@@ -101,3 +101,22 @@ describe("AnomaliesView", () => {
     expect(onAsk).toHaveBeenCalledOnce();
   });
 });
+
+describe("UsageNote", () => {
+  it("shows calls, tokens and cost, and leaves cost out when unpriced", async () => {
+    const { UsageNote } = await import("@/components/TeamTimeline");
+    const usage = {
+      calls: 9,
+      input_tokens: 12000,
+      cached_input_tokens: 0,
+      output_tokens: 3400,
+      reasoning_tokens: 0,
+      cost_usd: 0.162,
+    };
+    const { rerender } = render(<UsageNote usage={usage} />);
+    expect(screen.getByText("9 model calls · 15.4k tokens · ≈ $0.16")).toBeInTheDocument();
+
+    rerender(<UsageNote usage={{ ...usage, cost_usd: null }} />);
+    expect(screen.getByText("9 model calls · 15.4k tokens")).toBeInTheDocument();
+  });
+});

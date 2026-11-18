@@ -70,12 +70,23 @@ export type AgentRun = {
   ms: number;
 };
 
+/** Model calls, tokens and estimated USD cost behind one answer. */
+export type Usage = {
+  calls: number;
+  input_tokens: number;
+  cached_input_tokens: number;
+  output_tokens: number;
+  reasoning_tokens: number;
+  cost_usd: number | null; // null when the backend has no prices configured
+};
+
 /** The multi-agent part of a briefing: who was engaged and what they found. */
 export type TeamDetail = {
   route: string[];
   route_reason: string;
   agents: AgentRun[];
   verification: Verification | Record<string, never>;
+  usage?: Usage;
 };
 
 export type BriefingResponse = {
