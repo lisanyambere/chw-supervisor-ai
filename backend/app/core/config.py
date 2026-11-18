@@ -91,6 +91,24 @@ class Settings(BaseSettings):
         default="http://localhost:3000,http://127.0.0.1:3000", alias="CORS_ORIGINS"
     )
 
+    # ── LLM pricing ──────────────────────────────────────────────────────
+    # USD per million tokens, for cost estimates. Defaults are the gpt-5.5
+    # prices in Langfuse's model price table (checked 2026-11-18), so the app's
+    # estimate matches the cost Langfuse shows on each trace. Set them to your
+    # provider's contract prices; unset either one to report tokens only.
+    llm_price_input_per_mtok: float | None = Field(
+        default=5.0, alias="LLM_PRICE_INPUT_PER_MTOK", ge=0
+    )
+    llm_price_output_per_mtok: float | None = Field(
+        default=30.0, alias="LLM_PRICE_OUTPUT_PER_MTOK", ge=0
+    )
+
+    # ── Langfuse sharing ─────────────────────────────────────────────────
+    # Mark each briefing trace public, so its Langfuse link opens without a
+    # login. Off by default: the trace holds the full prompts and tool output.
+    # Only turn on with synthetic data.
+    langfuse_public_traces: bool = Field(default=False, alias="LANGFUSE_PUBLIC_TRACES")
+
     # ── LLM retry ────────────────────────────────────────────────────────
     # The openai SDK does its own exponential backoff and Retry-After handling;
     # we just configure how many attempts it makes (attempts = retries + 1).

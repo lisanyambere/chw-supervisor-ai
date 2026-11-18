@@ -21,6 +21,7 @@ from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 
 from app.core import get_logger, get_settings
+from app.llm.usage import record
 from app.observability.metrics import LLM_CALL_DURATION
 
 log = get_logger(__name__)
@@ -73,6 +74,7 @@ class LLM:
         try:
             completion = await self.client.chat.completions.create(**params)
             outcome = "ok"
+            record(completion, self.provider)
             return completion
         finally:
             LLM_CALL_DURATION.labels(

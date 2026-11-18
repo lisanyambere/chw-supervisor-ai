@@ -108,6 +108,9 @@ class BriefingResponse(BaseModel):
     route_reason: str = ""
     agents: list[AgentRunOut] = Field(default_factory=list)
     verification: dict[str, Any] = Field(default_factory=dict)
+    # Tokens and estimated USD cost of every model call behind this answer,
+    # including the answer formatter. See app.llm.usage.
+    usage: dict[str, Any] = Field(default_factory=dict)
 
 
 class DailyCount(BaseModel):

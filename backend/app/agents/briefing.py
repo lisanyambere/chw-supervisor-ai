@@ -200,6 +200,8 @@ async def run_briefing(
                     if tid:
                         result.trace_id = str(tid)
                         result.trace_url = lf.get_trace_url(trace_id=str(tid))
+                    if get_settings().langfuse_public_traces:
+                        agent_span.set_trace_as_public()
                     tool_plan = [
                         f"{e.agent}:{e.name}"
                         for e in result.trace
@@ -319,9 +321,15 @@ async def traced_chat(
     lf: Any | None,
     name: str,
     messages: list[ChatCompletionMessageParam],
+    *,
+    trace_id: str | None = None,
     **kwargs: Any,
 ) -> Any:
-    """One LLM call, recorded as a Langfuse generation when tracing is on."""
+    """One LLM call, recorded as a Langfuse generation when tracing is on.
+
+    Pass `trace_id` to attach the call to a trace that is no longer the
+    current one, e.g. the answer formatter, which runs after the briefing.
+    """
     if lf is None:
         return await llm.chat(messages=messages, **kwargs)
     with lf.start_as_current_observation(
@@ -330,6 +338,7 @@ async def traced_chat(
         model=llm.model,
         input=messages,
         metadata={"provider": llm.provider},
+        **({"trace_context": {"trace_id": trace_id}} if trace_id else {}),
     ) as gen:
         completion = await llm.chat(messages=messages, **kwargs)
         try:

@@ -9,7 +9,7 @@ register against the same default registry; the middleware in
 from __future__ import annotations
 
 from fastapi import APIRouter, Response
-from prometheus_client import CONTENT_TYPE_LATEST, Histogram, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 metrics_router = APIRouter()
 
@@ -36,6 +36,15 @@ LLM_CALL_DURATION = Histogram(
     "llm_call_duration_seconds",
     "LLM chat call latency by provider and outcome",
     labelnames=("provider", "outcome"),
+)
+
+
+# Tokens consumed by LLM calls, by provider and kind (input / output). Cost is
+# derived in Grafana from these and the configured prices.
+LLM_TOKENS = Counter(
+    "llm_tokens",
+    "Tokens consumed by LLM calls, by provider and kind",
+    labelnames=("provider", "kind"),
 )
 
 

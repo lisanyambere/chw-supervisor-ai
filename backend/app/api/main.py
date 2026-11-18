@@ -34,7 +34,7 @@ from app.api.schemas import (
 )
 from app.core import configure_logging, get_logger, get_settings
 from app.fhir import FhirClient, get_id_map
-from app.llm import get_llm
+from app.llm import get_llm, metered
 from app.observability import aflush as langfuse_flush
 from app.observability import get_langfuse, langfuse_project_url, metrics_router
 from app.observability.metrics import REQUEST_LATENCY
@@ -181,36 +181,36 @@ async def briefing(
     req: BriefingRequest,
     fhir: FhirClient = Depends(get_fhir),
 ) -> BriefingResponse:
-    try:
-        result = await run_briefing(
-            req.question,
-            fhir=fhir,
-            max_iterations=req.max_iterations,
-            lookback_days=req.lookback_days,
-        )
-    except RuntimeError as e:
-        # Most likely missing LLM credentials.
-        raise HTTPException(status_code=503, detail=str(e)) from e
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"upstream: {e}") from e
+    with metered() as usage:
+        try:
+            result = await run_briefing(
+                req.question,
+                fhir=fhir,
+                max_iterations=req.max_iterations,
+                lookback_days=req.lookback_days,
+            )
+        except RuntimeError as e:
+            # Most likely missing LLM credentials.
+            raise HTTPException(status_code=503, detail=str(e)) from e
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"upstream: {e}") from e
+
+        answer_doc: AnswerDocOut | None = None
+        if req.include_answer_doc:
+            try:
+                doc = await format_answer(result, req.question)
+                answer_doc = AnswerDocOut(**doc.to_dict())
+            except Exception as e:  # noqa: BLE001
+                # Formatter is best-effort — never fail the whole request
+                # because the second pass tripped. The caller still has
+                # `answer` (markdown) and `plan` to render with.
+                log.warning("formatter.failed", error=str(e))
 
     trace = (
         [TraceEntry(**vars(t)) for t in result.trace]
         if req.include_trace
         else []
     )
-
-    answer_doc: AnswerDocOut | None = None
-    if req.include_answer_doc:
-        try:
-            doc = await format_answer(result, req.question)
-            answer_doc = AnswerDocOut(**doc.to_dict())
-        except Exception as e:  # noqa: BLE001
-            # Formatter is best-effort — never fail the whole request because
-            # the second pass tripped. The caller still has `answer` (markdown)
-            # and `plan` to render with.
-            log.warning("formatter.failed", error=str(e))
-
     return BriefingResponse(
         answer=result.answer,
         iterations=result.iterations,
@@ -220,6 +220,7 @@ async def briefing(
         trace_id=result.trace_id,
         trace_url=result.trace_url,
         answer_doc=answer_doc,
+        usage=usage.to_dict(),
         **_team_detail(result),
     )
 
@@ -409,21 +410,22 @@ async def briefing_stream(
 
     async def run_agent() -> None:
         try:
-            result = await run_briefing(
-                question=question,
-                fhir=fhir,
-                max_iterations=max_iterations,
-                lookback_days=lookback_days,
-                on_event=on_event,
-            )
-            answer_doc_dict: dict | None = None
-            try:
-                doc = await format_answer(result, question)
-                answer_doc_dict = doc.to_dict()
-            except Exception as e:  # noqa: BLE001
-                # Same best-effort posture as POST /briefing — keep streaming
-                # even if the second-pass formatter trips.
-                log.warning("formatter.failed", error=str(e))
+            with metered() as usage:
+                result = await run_briefing(
+                    question=question,
+                    fhir=fhir,
+                    max_iterations=max_iterations,
+                    lookback_days=lookback_days,
+                    on_event=on_event,
+                )
+                answer_doc_dict: dict[str, Any] | None = None
+                try:
+                    doc = await format_answer(result, question)
+                    answer_doc_dict = doc.to_dict()
+                except Exception as e:  # noqa: BLE001
+                    # Same best-effort posture as POST /briefing — keep
+                    # streaming even if the second-pass formatter trips.
+                    log.warning("formatter.failed", error=str(e))
             await queue.put(
                 {
                     "kind": "response",
@@ -434,6 +436,7 @@ async def briefing_stream(
                     "trace_id": result.trace_id,
                     "trace_url": result.trace_url,
                     "answer_doc": answer_doc_dict,
+                    "usage": usage.to_dict(),
                     **_team_detail(result),
                 }
             )
