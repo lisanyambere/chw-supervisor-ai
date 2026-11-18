@@ -28,13 +28,59 @@ make up
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 0 — Infrastructure | **Done** | Docker stack up: OpenMRS 3, Postgres, Redis, Langfuse, Prometheus, Grafana |
+| 0 — Infrastructure | **Done** | Docker stack up: OpenMRS 3, Postgres, Redis, Prometheus, Grafana; tracing via Langfuse Cloud |
 | 1 — Synthetic data | **Done** | Synthea + Kenyan localization + CHW overlay + FHIR bulk load (deceased backfill included) |
-| 2 — Backend agents | **Done** | FastAPI + LangGraph briefing agent, FHIR client, tool registry, Langfuse traces |
-| 3 — Evaluator | **Done** | Rule-based scorers, LLM-as-judge (action + citations), golden-question runner |
-| 4 — Supervisor frontend | **In progress** | Next.js 15 + Tailwind shell, typed `/briefing` client, plan timeline, structured answer renderer |
+| 2 — Backend agents | **Done** | FastAPI + multi-agent LangGraph briefing team, FHIR client, tool registry, Langfuse traces |
+| 3 — Evaluator | **Done** | Rule-based scorers, LLM-as-judge, in-graph grounding verifier, scenario-recall evaluation |
+| 4 — Supervisor frontend | **In progress** | Next.js 15 + Tailwind shell, live briefing-team timeline, structured answer renderer, CHW detail drawer |
 | 5 — Observability | **Done** | Prometheus `/metrics`, request + tool + LLM histograms, Grafana dashboard, `/healthz` + `/readyz` |
 | 6 — Polish + deployment | Not started | README, video, VM deploy |
+
+---
+
+## How a briefing is produced
+
+```
+question → router ─┬→ team activity ──┐
+                   ├→ clinical signals ┼→ lead analyst → verifier → answer
+                   └→ data quality ───┘        ↑            │
+                                               └── rewrite ─┘  (at most once)
+```
+
+- **Router** engages only the specialists a question needs.
+- **Specialists** run in parallel, each a tool-calling agent over its own FHIR
+  tools: encounter counts and working-day gaps; fever cases by ward, child
+  danger signs and overdue follow-ups; visits with no location or logged
+  after a recorded death.
+- **Lead analyst** merges their findings, most urgent first.
+- **Verifier** is deterministic: every number and CHW id in the answer must
+  appear in a tool result, or the draft goes back for one rewrite.
+
+The graph is in `backend/app/agents/graph.py`. The frontend streams each step.
+
+### Evaluation
+
+The data generator plants seven scenarios (a fever cluster, a CHW who stops
+mid-week, overdue pregnancy follow-ups, and so on) and records them in
+`data/fixtures/scenarios.json`. `scripts/run_scenario_eval.py` runs the full
+briefing several times, scores how many planted findings each briefing
+conveys, and lists anything it flags beyond them. Latest run: **35 of 35**
+findings conveyed over five runs, 36 of 37 problems raised matching a planted
+finding, every answer passing the grounding check, about 24 s per briefing.
+`scripts/calibrate_judge.py` checks the judge against a person's ratings.
+Reports, with what the numbers do and do not show, are in
+[`docs/evals/`](docs/evals/).
+
+### Cost and traces
+
+Each briefing costs about **$0.23** in model calls (9 calls, roughly 11k input
+and 6k output tokens at gpt-5.5 prices). The app shows each run's calls,
+tokens and estimated cost; the backend exports token counts to Prometheus and
+Grafana charts token rate and spend. Every run is traced in Langfuse, and
+[one demo trace is public](https://us.cloud.langfuse.com/project/cmsqgs40101crad0dn7qvoxbi/traces/07b9b8daa51bb6461105d791ef3e6cd2).
+`scripts/export_traces.py` pulls traces and their costs into
+[`docs/evidence/`](docs/evidence/). Set `LANGFUSE_PUBLIC_TRACES=true` (synthetic
+data only) to make new traces public, and `LLM_PRICE_*` to your own prices.
 
 ---
 
@@ -44,10 +90,10 @@ make up
 |---------|-----|-------|
 | OpenMRS 3 backend | http://localhost:8080/openmrs | admin / Admin123 |
 | OpenMRS 3 frontend | http://localhost:8081 | SPA |
-| Langfuse | http://localhost:3100 | Create account on first visit; copy API keys to .env |
+| Langfuse Cloud | https://us.cloud.langfuse.com | Create a project; copy API keys to .env |
 | Grafana | http://localhost:3200 | admin / admin |
 | Prometheus | http://localhost:9090 | |
-| Postgres | localhost:5432 | DBs: community_health, langfuse |
+| Postgres | localhost:5432 | DB: community_health |
 | Redis | localhost:6379 | |
 
 ---
@@ -78,13 +124,13 @@ services separately to avoid pressure:
 | Redis healthy | ✓ localhost:6379 |
 | Prometheus healthy | ✓ localhost:9090 |
 | Grafana healthy | ✓ localhost:3200 |
-| Langfuse healthy | ✓ localhost:3100 |
+| Langfuse Cloud reachable | ✓ us.cloud.langfuse.com |
 | OpenMRS REST API | ✓ authenticated |
 | OpenMRS FHIR R4 | ✓ CapabilityStatement, fhirVersion 4.0.1 |
 
 ## Before Phase 1
 
-- [ ] Create Langfuse account at `http://localhost:3100`, add keys to `.env`
+- [ ] Create a Langfuse Cloud project at `https://us.cloud.langfuse.com`, add its keys to `.env`
 - [ ] Install Java 21: `winget install Microsoft.OpenJDK.21` (Java 8 on machine, Synthea needs 11+)
 
 ## Phase 1 — Synthetic data

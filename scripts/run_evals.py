@@ -54,25 +54,31 @@ GOLDEN: list[GoldenQuestion] = [
             "Quick supervisor check — name the top 2 and bottom 2 CHWs by "
             "encounter count over the last 30 days, with a one-line action."
         ),
-        expected_hint="top: chw-009 (140), chw-019 (140); bottom: chw-002 (16), chw-001 (99)",
+        expected_hint=(
+            "bottom 2 should be chw-002 (only two days of history — a good "
+            "answer says so) and chw-001 (stopped mid-week); top 2 vary by seed"
+        ),
         expected_max_tool_calls=1,
     ),
     GoldenQuestion(
         id="g2_chw002_count",
         question="How many encounters did chw-002 log in the last 30 days?",
-        expected_hint="16 encounters",
+        expected_hint="visits on only the last Thursday and Friday of the demo week",
         expected_max_tool_calls=2,  # may use list_chws to resolve id
     ),
     GoldenQuestion(
         id="g3_anomalies",
         question="Anything unusual in the team's activity over the last 30 days?",
-        expected_hint="chw-002 critically low (16 vs mean ~125)",
+        expected_hint=(
+            "the seven planted scenarios in data/fixtures/scenarios.json; "
+            "run scripts/run_scenario_eval.py to score them"
+        ),
         expected_max_tool_calls=2,
     ),
     GoldenQuestion(
         id="g4_team_mean",
         question="What is the team mean encounter count over the last 30 days?",
-        expected_hint="124.57",
+        expected_hint="stats.mean from team_activity_summary(days=30); varies by seed",
         expected_max_tool_calls=1,
     ),
     GoldenQuestion(

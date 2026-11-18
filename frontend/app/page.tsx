@@ -6,7 +6,14 @@ import { Topbar } from "@/components/Topbar";
 import { Hero } from "@/components/Hero";
 import { Composer } from "@/components/Composer";
 import { AiTurn, UserTurn, type Turn } from "@/components/Conversation";
-import { getReady, streamBriefing, type PlanStep } from "@/lib/api";
+import { ChwDrawer } from "@/components/ChwDrawer";
+import { ActivityView } from "@/components/ActivityView";
+import { AnomaliesView } from "@/components/AnomaliesView";
+import { RosterView } from "@/components/RosterView";
+import { loadTurns, saveTurns } from "@/lib/persist";
+import { useLoad } from "@/lib/useLoad";
+import { getAnomalies, getReady, streamBriefing } from "@/lib/api";
+import { EMPTY_TEAM, applyFrame } from "@/lib/team";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -24,9 +31,16 @@ export default function HomePage() {
   const [nav, setNav] = useState<NavId>("brief");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  const [drawerChw, setDrawerChw] = useState<string | null>(null);
   const [backendStatus, setBackendStatus] = useState<
     "checking" | "ready" | "down"
   >("checking");
+  const [langfuseUrl, setLangfuseUrl] = useState<string | null>(null);
+  const [chwCount, setChwCount] = useState<number | undefined>(undefined);
+  // Fetched once for the sidebar badge and shared with the Anomalies view.
+  const anomalies = useLoad((signal) => getAnomalies({ signal }));
+  // Saved turns load after mount: localStorage is not there during SSR.
+  const [restored, setRestored] = useState(false);
   const [backendReason, setBackendReason] = useState<string>(
     "Checking backend...",
   );
@@ -40,12 +54,28 @@ export default function HomePage() {
 
   useEffect(() => () => closeStream.current?.(), []);
 
+  useEffect(() => {
+    setTurns(loadTurns());
+    setRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (restored) saveTurns(turns);
+  }, [turns, restored]);
+
+  function newConversation() {
+    closeStream.current?.();
+    setTurns([]);
+  }
+
   // Mount-time backend probe. Aborts on unmount so a slow probe doesn't
   // setState after teardown.
   useEffect(() => {
     const ctrl = new AbortController();
     getReady({ signal: ctrl.signal })
       .then((r) => {
+        setLangfuseUrl(r.langfuse_url ?? null);
+        setChwCount(r.chws_loaded);
         if (r.status === "ready") {
           setBackendStatus("ready");
           return;
@@ -67,7 +97,8 @@ export default function HomePage() {
 
   // Re-pin whenever turns change and we were already at the bottom.
   useEffect(() => {
-    if (!pinnedRef.current) return;
+    // Nothing to follow yet: leave the empty state at its top.
+    if (!pinnedRef.current || turns.length === 0) return;
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
@@ -83,16 +114,18 @@ export default function HomePage() {
   function ask(q: string) {
     if (busy) return;
     setBusy(true);
+    // Answers render in the briefing view, wherever the question was asked.
+    setNav("brief");
     const userTurn: Turn = { id: uid(), role: "user", q, t: nowHHMM() };
     const aiId = uid();
     const placeholder: Turn = {
       id: aiId,
       role: "ai",
-      plan: [],
-      activeIdx: 0,
+      team: EMPTY_TEAM,
       doc: null,
       sources: [],
       traceId: null,
+      traceUrl: null,
       done: false,
     };
     setTurns((prev) => [...prev, userTurn, placeholder]);
@@ -109,72 +142,40 @@ export default function HomePage() {
       q,
       {
         onFrame: (frame) => {
-          if (frame.kind === "tool_start") {
-            // Append a row in `running` state — the spinner is driven by
-            // i === activeIdx, so we push a placeholder PlanStep and bump
-            // activeIdx to it.
-            const step: PlanStep = {
-              tool: frame.tool,
-              args: frame.args,
-              ms: 0,
-              rows: 0,
-            };
-            patchAi((t) => ({
-              ...t,
-              plan: [...t.plan, step],
-              activeIdx: t.plan.length,
-            }));
-          } else if (frame.kind === "tool_done") {
-            // Replace the matching pending row with timed values. Match
-            // on (tool, args) FIFO — same semantics as backend _derive_plan.
-            patchAi((t) => {
-              const idx = t.plan.findIndex(
-                (s) =>
-                  s.tool === frame.tool &&
-                  s.args === frame.args &&
-                  s.ms === 0,
-              );
-              if (idx === -1) return t;
-              const next = t.plan.slice();
-              next[idx] = {
-                tool: frame.tool,
-                args: frame.args,
-                ms: frame.ms,
-                rows: frame.rows,
+          patchAi((t) => {
+            const next = { ...t, team: applyFrame(t.team, frame) };
+            if (frame.kind === "response") {
+              return {
+                ...next,
+                doc: frame.answer_doc,
+                sources: frame.answer_doc?.sources ?? [],
+                traceId: frame.trace_id,
+                traceUrl: frame.trace_url ?? null,
+                done: true,
               };
-              return { ...t, plan: next, activeIdx: idx + 1 };
-            });
-          } else if (frame.kind === "response") {
-            patchAi((t) => ({
-              ...t,
-              plan: frame.plan, // canonical ordering from backend
-              activeIdx: frame.plan.length,
-              doc: frame.answer_doc,
-              sources: frame.answer_doc?.sources ?? [],
-              traceId: frame.trace_id,
-              done: true,
-            }));
-          } else if (frame.kind === "error") {
-            patchAi((t) => ({
-              ...t,
-              plan: [],
-              doc: {
-                headline: "The briefing run failed.",
-                period: "",
-                sections: [
-                  {
-                    kind: "callout",
-                    tone: "alert",
-                    title: "Agent error",
-                    body: frame.message,
-                    evidence: [],
-                  },
-                ],
-                sources: [],
-              },
-              done: true,
-            }));
-          }
+            }
+            if (frame.kind === "error") {
+              return {
+                ...next,
+                doc: {
+                  headline: "The briefing run failed.",
+                  period: "",
+                  sections: [
+                    {
+                      kind: "callout",
+                      tone: "alert",
+                      title: "Agent error",
+                      body: frame.message,
+                      evidence: [],
+                    },
+                  ],
+                  sources: [],
+                },
+                done: true,
+              };
+            }
+            return next;
+          });
         },
         onTransportError: (e) => {
           console.error("briefing stream transport error", e);
@@ -183,6 +184,7 @@ export default function HomePage() {
               ? t
               : {
                   ...t,
+                  team: { ...t.team, done: true },
                   doc: {
                     headline: "Couldn't reach the briefing service.",
                     period: "",
@@ -213,15 +215,32 @@ export default function HomePage() {
   const isEmpty = turns.length === 0;
 
   return (
-    <div
-      className="grid h-screen"
-      style={{ gridTemplateColumns: "244px 1fr" }}
-    >
-      <Sidebar active={nav} onSelect={setNav} />
-      <div className="flex flex-col overflow-hidden">
-        <Topbar breadcrumb={`workspace / ${navLabel(nav)}`} />
-        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
-          {isEmpty ? (
+    <div className="app-shell grid h-[100dvh]">
+      <Sidebar
+        active={nav}
+        onSelect={setNav}
+        langfuseUrl={langfuseUrl}
+        badges={{
+          alert:
+            anomalies.status === "ready" ? anomalies.data.action_count : undefined,
+          team: chwCount,
+        }}
+      />
+      <div className="main-stage flex flex-col overflow-hidden">
+        <Topbar
+          breadcrumb={`workspace / ${navLabel(nav)}`}
+          onNewConversation={
+            nav === "brief" && turns.length > 0 && !busy ? newConversation : undefined
+          }
+        />
+        <main ref={scrollRef} onScroll={onScroll} className="content-scroll flex-1 overflow-y-auto">
+          {nav === "chart" ? (
+            <ActivityView />
+          ) : nav === "team" ? (
+            <RosterView onSelectChw={setDrawerChw} />
+          ) : nav === "alert" ? (
+            <AnomaliesView state={anomalies} onSelectChw={setDrawerChw} onAsk={ask} />
+          ) : isEmpty ? (
             <Hero onAsk={ask} />
           ) : (
             <div className="pb-4">
@@ -229,12 +248,12 @@ export default function HomePage() {
                 t.role === "user" ? (
                   <UserTurn key={t.id} q={t.q} t={t.t} />
                 ) : (
-                  <AiTurn key={t.id} turn={t} />
+                  <AiTurn key={t.id} turn={t} onSelectChw={setDrawerChw} />
                 ),
               )}
             </div>
           )}
-        </div>
+        </main>
         <Composer
           busy={busy}
           onSubmit={ask}
@@ -244,6 +263,11 @@ export default function HomePage() {
           }
         />
       </div>
+      <ChwDrawer
+        chwId={drawerChw}
+        onClose={() => setDrawerChw(null)}
+        onAsk={ask}
+      />
     </div>
   );
 }

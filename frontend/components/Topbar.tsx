@@ -5,9 +5,12 @@ import { useEffect, useState } from "react";
 export function Topbar({
   breadcrumb,
   status = "fhir · langfuse · azure",
+  onNewConversation,
 }: {
   breadcrumb: string;
   status?: string;
+  /** Shown as a "New conversation" button when there is one to clear. */
+  onNewConversation?: () => void;
 }) {
   // Client-only to avoid SSR/CSR hydration mismatch on the date string.
   const [dateStr, setDateStr] = useState<string>("");
@@ -27,27 +30,23 @@ export function Topbar({
   }, []);
 
   return (
-    <div
-      className="h-[46px] border-b border-[var(--line)] flex items-center justify-between px-5 sticky top-0 z-10"
-      style={{ background: "var(--bg)" }}
-    >
-      <div className="font-mono text-[12px] text-[var(--ink-3)]">
-        {breadcrumb}
+    <header className="topbar flex items-center justify-between px-6 sticky top-0 z-10">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="topbar-index">01</span>
+        <div className="topbar-breadcrumb truncate">{breadcrumb}</div>
       </div>
       <div className="flex items-center gap-3">
-        <div className="font-mono text-[11px] text-[var(--ink-3)]">{dateStr}</div>
-        <div
-          className="font-mono text-[11px] flex items-center gap-2 px-2.5 py-1 rounded-full border"
-          style={{
-            background: "var(--surface)",
-            borderColor: "var(--line)",
-            color: "var(--ink-2)",
-          }}
-        >
+        {onNewConversation && (
+          <button className="topbar-new" type="button" onClick={onNewConversation}>
+            New conversation
+          </button>
+        )}
+        <div className="topbar-date">{dateStr}</div>
+        <div className="system-status">
           <span className="pulse-dot pulse-dot--ok" />
           {status}
         </div>
       </div>
-    </div>
+    </header>
   );
 }

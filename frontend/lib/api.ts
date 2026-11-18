@@ -51,6 +51,42 @@ export type PlanStep = {
   args: string;
   ms: number;
   rows: number;
+  agent?: string | null; // the specialist that made the call
+};
+
+/** Did every figure in the answer trace back to a tool result? */
+export type Verification = {
+  grounded: boolean;
+  figures_checked: number;
+  ungrounded_numbers: string[];
+  ungrounded_chw_ids: string[];
+  revisions: number;
+};
+
+export type AgentRun = {
+  name: string;
+  findings: string;
+  tool_calls: number;
+  ms: number;
+};
+
+/** Model calls, tokens and estimated USD cost behind one answer. */
+export type Usage = {
+  calls: number;
+  input_tokens: number;
+  cached_input_tokens: number;
+  output_tokens: number;
+  reasoning_tokens: number;
+  cost_usd: number | null; // null when the backend has no prices configured
+};
+
+/** The multi-agent part of a briefing: who was engaged and what they found. */
+export type TeamDetail = {
+  route: string[];
+  route_reason: string;
+  agents: AgentRun[];
+  verification: Verification | Record<string, never>;
+  usage?: Usage;
 };
 
 export type BriefingResponse = {
@@ -58,9 +94,10 @@ export type BriefingResponse = {
   iterations: number;
   tool_calls: number;
   trace_id: string | null;
+  trace_url?: string | null; // this run's trace in the Langfuse UI
   plan: PlanStep[];
   answer_doc: AnswerDoc | null;
-};
+} & TeamDetail;
 
 export async function postBriefing(
   question: string,
@@ -106,6 +143,7 @@ export type ReadinessResponse = {
   llm_model: string;
   patients_loaded: number;
   chws_loaded: number;
+  langfuse_url: string | null; // Langfuse project page; null when tracing is off
 };
 
 export async function getReady(
@@ -118,21 +156,168 @@ export async function getReady(
   return (await res.json()) as ReadinessResponse;
 }
 
+// ─── /chws/{id} (detail drawer) ─────────────────────────────────────────────
+
+export type DailyCount = {
+  date: string; // YYYY-MM-DD
+  encounter_count: number;
+};
+
+export type ChwDetail = {
+  chw_id: string;
+  practitioner_uuid: string;
+  name: string | null;
+  ward: string | null;
+  encounters_30d: number;
+  encounters_7d: number;
+  patients_30d: number;
+  daily: DailyCount[]; // last 7 days, oldest first
+};
+
+export async function getChwDetail(
+  chwId: string,
+  opts: { signal?: AbortSignal } = {},
+): Promise<ChwDetail> {
+  const res = await fetch(
+    `${BACKEND_URL}/chws/${encodeURIComponent(chwId)}`,
+    { signal: opts.signal },
+  );
+  if (res.status === 404) throw new Error(`${chwId} is not on the roster.`);
+  if (!res.ok) throw new Error(`CHW lookup failed: ${res.status}`);
+  return (await res.json()) as ChwDetail;
+}
+
+// ─── /chws (roster) and /anomalies ──────────────────────────────────────────
+
+export type ActivityPattern = "stopped_early" | "started_late" | "no_visits";
+
+export type RosterRow = {
+  chw_id: string;
+  name: string | null;
+  ward: string | null;
+  encounters_30d: number;
+  encounters_7d: number;
+  pattern: ActivityPattern | null;
+  last_active: string | null;
+};
+
+export async function getRoster(
+  opts: { signal?: AbortSignal } = {},
+): Promise<RosterRow[]> {
+  const res = await fetch(`${BACKEND_URL}/chws`, { signal: opts.signal });
+  if (!res.ok) throw new Error(`Roster lookup failed: ${res.status}`);
+  return ((await res.json()) as { chws: RosterRow[] }).chws;
+}
+
+export type FeverCluster = {
+  ward: string;
+  case_count: number;
+  malaria_diagnosed: number;
+  chw_ids: string[];
+  first_date: string;
+  last_date: string;
+};
+
+export type DangerSignChild = {
+  patient_name: string;
+  age_months: number;
+  respiratory_rate: number;
+  temperature_c: number | null;
+  chw_id: string | null;
+  ward: string | null;
+  date: string;
+};
+
+export type OverduePatient = {
+  patient_name: string;
+  last_visit: string;
+  return_date: string;
+  days_overdue: number;
+  pregnant: boolean;
+  last_systolic_bp: number | null;
+  chw_id: string | null;
+  ward: string | null;
+};
+
+export type ActivityGap = {
+  chw_id: string;
+  pattern: ActivityPattern;
+  first_active: string | null;
+  last_active: string | null;
+  weekdays_missed_before_team_last_active: number;
+};
+
+export type Anomalies = {
+  days: number;
+  action_count: number;
+  fever_clusters: FeverCluster[];
+  children: DangerSignChild[];
+  overdue: OverduePatient[];
+  activity_gaps: { team_last_active: string | null; rows: ActivityGap[] };
+  missing_location: {
+    total_missing_location: number;
+    rows: { chw_id: string; ward: string | null; missing_location: number; weeks: Record<string, number> }[];
+  };
+  visits_after_death: {
+    rows: { patient_name: string; death_date: string; visit_date: string; chw_id: string | null; ward: string | null }[];
+  };
+};
+
+export async function getAnomalies(
+  opts: { signal?: AbortSignal } = {},
+): Promise<Anomalies> {
+  const res = await fetch(`${BACKEND_URL}/anomalies`, { signal: opts.signal });
+  if (!res.ok) throw new Error(`Anomaly check failed: ${res.status}`);
+  return (await res.json()) as Anomalies;
+}
+
+// ─── /activity/daily (activity chart) ───────────────────────────────────────
+
+export type DailyActivity = {
+  days: number;
+  series: DailyCount[]; // oldest first
+  total: number;
+};
+
+export async function getDailyActivity(
+  days: number,
+  opts: { signal?: AbortSignal } = {},
+): Promise<DailyActivity> {
+  const res = await fetch(`${BACKEND_URL}/activity/daily?days=${days}`, {
+    signal: opts.signal,
+  });
+  if (!res.ok) throw new Error(`Activity lookup failed: ${res.status}`);
+  return (await res.json()) as DailyActivity;
+}
+
 // ─── /briefing/stream (SSE) ─────────────────────────────────────────────────
 //
 // Mirrors backend/app/agents/briefing.py:StreamEvent. The wire format is
-// SSE with named events: tool_start, tool_done, response, error. The
+// SSE with named events: route, agent_start, tool_start, tool_done,
+// agent_done, verify, response, error. The
 // `response` frame carries the same shape as POST /briefing's body so
 // callers can render an AnswerDoc when the agent finishes.
 
+export type RouteFrame = {
+  kind: "route";
+  agents: string[];
+  reason?: string;
+};
+
+export type AgentStartFrame = { kind: "agent_start"; agent: string };
+export type AgentDoneFrame = { kind: "agent_done"; agent: string; ms: number };
+export type VerifyFrame = { kind: "verify"; verification: Verification };
+
 export type ToolStartFrame = {
   kind: "tool_start";
+  agent: string;
   tool: string;
   args: string;
 };
 
 export type ToolDoneFrame = {
   kind: "tool_done";
+  agent: string;
   tool: string;
   args: string;
   ms: number;
@@ -146,8 +331,9 @@ export type ResponseFrame = {
   tool_calls: number;
   plan: PlanStep[];
   trace_id: string | null;
+  trace_url?: string | null; // this run's trace in the Langfuse UI
   answer_doc: AnswerDoc | null;
-};
+} & TeamDetail;
 
 export type ErrorFrame = {
   kind: "error";
@@ -155,6 +341,10 @@ export type ErrorFrame = {
 };
 
 export type StreamFrame =
+  | RouteFrame
+  | AgentStartFrame
+  | AgentDoneFrame
+  | VerifyFrame
   | ToolStartFrame
   | ToolDoneFrame
   | ResponseFrame
@@ -198,6 +388,10 @@ export function streamBriefing(
   };
 
   const kinds: StreamFrame["kind"][] = [
+    "route",
+    "agent_start",
+    "agent_done",
+    "verify",
     "tool_start",
     "tool_done",
     "response",

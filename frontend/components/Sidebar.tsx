@@ -13,64 +13,69 @@ import { cn } from "@/lib/cn";
 
 type NavId = "brief" | "alert" | "team" | "patient" | "chart";
 
-const NAV: { id: NavId; label: string; icon: React.ReactNode; badge?: string; tone?: "alert" }[] = [
+const NAV: { id: NavId; label: string; icon: React.ReactNode; tone?: "alert" }[] = [
   { id: "brief",   label: "Monday briefing", icon: <FileText size={14} /> },
-  { id: "alert",   label: "Anomalies",       icon: <AlertTriangle size={14} />, badge: "2", tone: "alert" },
-  { id: "team",    label: "CHW roster",      icon: <Users size={14} />,        badge: "30" },
+  { id: "alert",   label: "Anomalies",       icon: <AlertTriangle size={14} />, tone: "alert" },
+  { id: "team",    label: "CHW roster",      icon: <Users size={14} /> },
   { id: "patient", label: "Patient lookup",  icon: <Search size={14} /> },
   { id: "chart",   label: "Activity charts", icon: <BarChart3 size={14} /> },
 ];
 
-const OBS = [
-  { label: "langfuse",   href: "http://localhost:3100" },
-  { label: "grafana",    href: "http://localhost:3001" },
-  { label: "openmrs",    href: "http://localhost:8080/openmrs" },
+// Local services from infra/docker-compose*.yml. Langfuse is Langfuse Cloud;
+// its project link comes from the backend's /readyz.
+const LOCAL_OBS = [
+  { label: "grafana",    href: "http://localhost:3200" },
+  { label: "openmrs",    href: "http://localhost:8081/openmrs/spa" },
   { label: "prometheus", href: "http://localhost:9090" },
 ];
 
 export function Sidebar({
   active,
   onSelect,
+  langfuseUrl,
+  badges,
 }: {
   active: NavId;
   onSelect: (id: NavId) => void;
+  langfuseUrl: string | null;
+  /** Counts shown beside nav items; absent until known. */
+  badges: Partial<Record<NavId, number>>;
 }) {
+  const obs = langfuseUrl
+    ? [{ label: "langfuse", href: langfuseUrl }, ...LOCAL_OBS]
+    : LOCAL_OBS;
   return (
-    <aside
-      className="border-r border-[var(--line)] flex flex-col"
-      style={{ background: "var(--surface-2)" }}
-    >
+    <aside className="sidebar flex flex-col">
       {/* Brand block */}
-      <div className="px-4 pt-5 pb-4 flex items-center gap-2.5">
-        <div
-          className="w-[26px] h-[26px] rounded-md grid place-items-center text-[10px] font-mono font-semibold"
-          style={{ background: "var(--ink)", color: "var(--bg)" }}
-        >
-          CH
+      <div className="brand-block px-5 pt-6 pb-7 flex items-center gap-3">
+        <div className="brand-mark" aria-hidden="true">
+          <span>+</span>
         </div>
         <div className="leading-tight">
-          <div className="text-[13px] font-semibold">Field Briefing</div>
-          <div className="text-[11px] font-mono text-[var(--ink-3)]">kakamega · v0.3</div>
+          <div className="brand-name">Field Briefing</div>
+          <div className="brand-place">Kakamega County · 0.3</div>
         </div>
       </div>
 
       {/* Workspace nav */}
-      <div className="px-3">
-        <div className="text-[10px] font-mono uppercase tracking-[0.07em] text-[var(--ink-4)] px-2 mb-2">
-          workspace
+      <div className="sidebar-nav px-3">
+        <div className="sidebar-label px-2 mb-2">
+          Field desk
         </div>
         <nav className="flex flex-col gap-0.5">
           {NAV.map((n) => (
             <button
               key={n.id}
               onClick={() => onSelect(n.id)}
+              aria-label={n.label}
+              aria-current={active === n.id ? "page" : undefined}
               className={cn("nav-item", active === n.id && "nav-item--active")}
             >
-              <span className="text-[var(--ink-3)]">{n.icon}</span>
+              <span className="nav-icon">{n.icon}</span>
               <span>{n.label}</span>
-              {n.badge && (
+              {badges[n.id] !== undefined && (
                 <span className={cn("nav-badge", n.tone === "alert" && "nav-badge--alert")}>
-                  {n.badge}
+                  {badges[n.id]}
                 </span>
               )}
             </button>
@@ -79,37 +84,34 @@ export function Sidebar({
       </div>
 
       {/* Observability */}
-      <div className="px-3 mt-6">
-        <div className="text-[10px] font-mono uppercase tracking-[0.07em] text-[var(--ink-4)] px-2 mb-2">
-          observability
+      <div className="sidebar-systems px-3 mt-6">
+        <div className="sidebar-label px-2 mb-2">
+          Systems
         </div>
         <nav className="flex flex-col gap-0.5">
-          {OBS.map((o) => (
+          {obs.map((o) => (
             <a
               key={o.label}
               href={o.href}
               target="_blank"
               rel="noreferrer"
-              className="nav-item font-mono text-[12px] text-[var(--ink-2)]"
+              className="nav-item nav-item--external font-mono text-[11px]"
             >
               <span>{o.label}</span>
-              <ExternalLink size={11} className="ml-auto text-[var(--ink-4)]" />
+              <ExternalLink size={11} className="ml-auto" />
             </a>
           ))}
         </nav>
       </div>
 
       {/* User block */}
-      <div className="mt-auto px-4 py-4 border-t border-[var(--line)] flex items-center gap-2.5">
-        <div
-          className="w-7 h-7 rounded-full grid place-items-center text-[11px] font-mono font-semibold"
-          style={{ background: "var(--accent-2)", color: "var(--accent-ink)" }}
-        >
+      <div className="user-block mt-auto px-4 py-4 flex items-center gap-2.5">
+        <div className="user-avatar">
           MK
         </div>
         <div className="leading-tight">
-          <div className="text-[12px] font-medium">Margaret Kimani</div>
-          <div className="text-[11px] text-[var(--ink-3)]">Supervisor · Kakamega</div>
+          <div className="text-[13px] font-semibold">Margaret Kimani</div>
+          <div className="user-role">County supervisor</div>
         </div>
       </div>
     </aside>

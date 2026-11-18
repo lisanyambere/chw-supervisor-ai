@@ -121,11 +121,16 @@ def disable_langfuse(monkeypatch: pytest.MonkeyPatch) -> None:
 # ── Test ───────────────────────────────────────────────────────────────
 
 
+ROUTE_TO_TEAM = _FakeMessage(content='{"agents": ["team"], "reason": "activity question"}')
+
+
 @pytest.mark.asyncio
 async def test_run_briefing_calls_tool_then_answers() -> None:
     fhir = FakeFhir(count_value=10)
 
     scripted = [
+        # Router: only the team-activity specialist is needed.
+        _FakeMessage(content='{"agents": ["team"], "reason": "activity question"}'),
         # Turn 1: model asks for team_activity_summary.
         _FakeMessage(
             tool_calls=[
@@ -148,8 +153,10 @@ async def test_run_briefing_calls_tool_then_answers() -> None:
         lookback_days=14,
     )
 
-    assert result.iterations == 2
+    assert result.route == ["team"]
+    assert result.iterations == 3  # router + two specialist turns
     assert result.tool_calls == 1
+    assert result.verification["grounded"] is True
     assert "10 encounters" in result.answer
 
     # Trace contains both the tool_call and tool_result, then assistant.
@@ -161,8 +168,8 @@ async def test_run_briefing_calls_tool_then_answers() -> None:
     assert result.trace[1].result["days"] == 14
 
     # The system prompt must have been templated with lookback_days=14.
-    system_prompt = llm.calls[0]["messages"][0]["content"]
-    assert "Default lookback window: 14 days" in system_prompt
+    system_prompt = llm.calls[1]["messages"][0]["content"]
+    assert "Default look-back window: 14 days" in system_prompt
 
     # FHIR was called once per CHW.
     assert len(fhir.count_calls) == 3

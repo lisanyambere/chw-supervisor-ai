@@ -25,10 +25,12 @@ services:
       - openmrs-data:/openmrs/data
     healthcheck:
       # See docker-compose.yml for the rationale — /openmrs/health is 404.
+      # 10s probes detect restart readiness ~90s sooner; high retries keep
+      # first-boot Liquibase (10-15 min) from flipping the container unhealthy.
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/openmrs/ || exit 1"]
-      interval: 30s
+      interval: 10s
       timeout: 10s
-      retries: 15
+      retries: 90
       start_period: 180s
 
   openmrs-frontend:

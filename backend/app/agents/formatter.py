@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.core import get_logger
 from app.llm import LLM, get_llm
+from app.observability import get_langfuse
 
 if TYPE_CHECKING:
     from app.agents.briefing import BriefingResult, PlanStep
@@ -275,6 +276,9 @@ async def format_answer(
     Falls back to a single-callout doc if the LLM call or JSON parsing fails;
     callers should always be able to render the result.
     """
+    # Imported here: briefing.py imports this module's package at load time.
+    from app.agents.briefing import traced_chat
+
     llm = llm or get_llm()
     user = (
         f"QUESTION:\n{question}\n\n"
@@ -282,11 +286,16 @@ async def format_answer(
         f"MARKDOWN ANSWER:\n{result.answer}\n"
     )
     try:
-        completion = await llm.chat(
-            messages=[
+        # Recorded on the briefing's own trace, so its cost shows there too.
+        completion = await traced_chat(
+            llm,
+            get_langfuse(),
+            "llm.format",
+            [
                 {"role": "system", "content": _FORMATTER_SYSTEM},
                 {"role": "user", "content": user},
             ],
+            trace_id=result.trace_id,
             response_format={"type": "json_object"},
         )
         raw = completion.choices[0].message.content or ""

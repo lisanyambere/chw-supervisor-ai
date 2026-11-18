@@ -22,6 +22,10 @@ describe("postBriefing", () => {
       trace_id: null,
       plan: [],
       answer_doc: null,
+      route: [],
+      route_reason: "",
+      agents: [],
+      verification: {},
     };
     mockFetch({
       ok: true,

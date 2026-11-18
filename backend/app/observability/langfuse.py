@@ -34,6 +34,22 @@ def get_langfuse() -> Any | None:
     return client
 
 
+@lru_cache(maxsize=1)
+def langfuse_project_url() -> str | None:
+    """The Langfuse project's page, for linking from the UI. None when tracing
+    is off or the project cannot be looked up."""
+    client = get_langfuse()
+    if client is None:
+        return None
+    try:
+        # The SDK only builds trace links; the project page is its prefix.
+        url = client.get_trace_url(trace_id="_")
+    except Exception as e:  # noqa: BLE001
+        log.warning("langfuse.project_url_failed", error=str(e))
+        return None
+    return url.removesuffix("/traces/_") if url else None
+
+
 async def aflush() -> None:
     """Best-effort flush of pending events on shutdown."""
     client = get_langfuse()

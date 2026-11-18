@@ -15,6 +15,7 @@ from app.fhir.id_map import IdMap
 # Reuse the fake-LLM scaffolding from the integration test by re-importing it.
 from tests.integration.test_briefing_agent import (  # noqa: E402
     FakeFhir,
+    ROUTE_TO_TEAM,
     FakeLLM,
     _FakeMessage,
     _FakeToolCall,
@@ -39,6 +40,7 @@ def disable_langfuse(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_on_event_fires_tool_start_done_response_in_order() -> None:
     fhir = FakeFhir(count_value=7)
     scripted = [
+        ROUTE_TO_TEAM,
         _FakeMessage(
             tool_calls=[
                 _FakeToolCall(
@@ -65,9 +67,20 @@ async def test_on_event_fires_tool_start_done_response_in_order() -> None:
     )
 
     kinds = [e.kind for e in events]
-    assert kinds == ["tool_start", "tool_done", "response"]
+    assert kinds == [
+        "route",
+        "agent_start",
+        "tool_start",
+        "tool_done",
+        "agent_done",
+        "verify",
+        "response",
+    ]
 
-    start, done, resp = events
+    route, _, start, done, _, verify, resp = events
+    assert route.agents == ["team"]
+    assert start.agent == done.agent == "team"
+    assert verify.verification is not None and verify.verification["grounded"]
     assert start.tool == "team_activity_summary"
     assert start.args == "(days=30)"
 
@@ -77,7 +90,7 @@ async def test_on_event_fires_tool_start_done_response_in_order() -> None:
     assert done.rows is not None and done.rows >= 1
 
     assert resp.answer == "Three CHWs at 7 each."
-    assert resp.iterations == 2
+    assert resp.iterations == 3
     assert resp.tool_calls == 1
     assert resp.plan is not None and len(resp.plan) == 1
 
@@ -88,6 +101,7 @@ async def test_on_event_handles_parallel_tool_calls() -> None:
     # then two tool_dones (each in some order), then response.
     fhir = FakeFhir(count_value=4)
     scripted = [
+        ROUTE_TO_TEAM,
         _FakeMessage(
             tool_calls=[
                 _FakeToolCall("c1", "team_activity_summary", '{"days": 7}'),
@@ -143,6 +157,7 @@ def test_sse_endpoint_streams_events(monkeypatch: pytest.MonkeyPatch) -> None:
 
     fhir = FakeFhir(count_value=2)
     scripted = [
+        ROUTE_TO_TEAM,
         _FakeMessage(
             tool_calls=[
                 _FakeToolCall("c1", "team_activity_summary", '{"days": 14}')
@@ -195,5 +210,15 @@ def test_sse_endpoint_streams_events(monkeypatch: pytest.MonkeyPatch) -> None:
         app.dependency_overrides.pop(get_fhir, None)
 
     kinds = [e["kind"] for e in events]
-    assert kinds == ["tool_start", "tool_done", "response"]
+    assert kinds == [
+        "route",
+        "agent_start",
+        "tool_start",
+        "tool_done",
+        "agent_done",
+        "verify",
+        "response",
+    ]
+    assert events[-1]["payload"]["route"] == ["team"]
+    assert events[-1]["payload"]["verification"]["grounded"] is True
     assert events[-1]["payload"]["answer"] == "done"

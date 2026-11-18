@@ -60,15 +60,22 @@ describe("streamBriefing", () => {
     expect(es.url).toContain("lookback_days=14");
   });
 
-  it("forwards tool_start, tool_done, response frames in order", () => {
+  it("forwards route, tool and response frames in order", () => {
     install();
     const frames: StreamFrame[] = [];
     streamBriefing("q", { onFrame: (f) => frames.push(f) });
 
     const es = MockEventSource.last!;
-    es.emit({ kind: "tool_start", tool: "team_activity_summary", args: "(days=30)" });
+    es.emit({ kind: "route", agents: ["team"] });
+    es.emit({
+      kind: "tool_start",
+      agent: "team",
+      tool: "team_activity_summary",
+      args: "(days=30)",
+    });
     es.emit({
       kind: "tool_done",
+      agent: "team",
       tool: "team_activity_summary",
       args: "(days=30)",
       ms: 412,
@@ -82,9 +89,14 @@ describe("streamBriefing", () => {
       plan: [{ tool: "team_activity_summary", args: "(days=30)", ms: 412, rows: 30 }],
       trace_id: "t-1",
       answer_doc: null,
+      route: ["team"],
+      route_reason: "",
+      agents: [],
+      verification: {},
     });
 
     expect(frames.map((f) => f.kind)).toEqual([
+      "route",
       "tool_start",
       "tool_done",
       "response",
@@ -105,6 +117,10 @@ describe("streamBriefing", () => {
       plan: [],
       trace_id: null,
       answer_doc: null,
+      route: ["team"],
+      route_reason: "",
+      agents: [],
+      verification: {},
     });
 
     expect(es.closed).toBe(true);

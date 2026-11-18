@@ -31,6 +31,15 @@ function ChwChip({
   );
 }
 
+// Turn every chw-NNN mentioned in prose into a chip that opens the drawer.
+function withChwChips(text: string, onClick?: (id: string) => void) {
+  return text
+    .split(/(chw-\d{3})/)
+    .map((part, i) =>
+      i % 2 === 1 ? <ChwChip key={i} id={part} onClick={onClick} /> : part,
+    );
+}
+
 function calloutGlyph(tone: Tone) {
   if (tone === "alert") return "!";
   if (tone === "warn") return "?";
@@ -61,18 +70,20 @@ function Callout({
   title,
   body,
   evidence,
+  onSelectChw,
 }: {
   tone: Tone;
   title: string;
   body: string;
   evidence: string[];
+  onSelectChw?: (id: string) => void;
 }) {
   return (
     <div className={cn("callout", `callout--${tone}`)}>
       <div className="callout__icon">{calloutGlyph(tone)}</div>
       <div>
         <div className="callout__title">{title}</div>
-        <div className="callout__body">{body}</div>
+        <div className="callout__body">{withChwChips(body, onSelectChw)}</div>
         {evidence.length > 0 && (
           <div className="callout__evidence">
             {evidence.map((e) => (
@@ -111,7 +122,7 @@ function Ranked({
           onClick={() => onSelectChw?.(it.id)}
           type="button"
         >
-          <ChwChip id={it.id} />
+          <span className="chip">{it.id}</span>
           <div>
             <div className="ranked__row__primary">{it.primary}</div>
             <div className="ranked__row__secondary">{it.secondary}</div>
@@ -144,11 +155,13 @@ export function AnswerCard({
   doc,
   sources,
   traceId,
+  traceUrl,
   onSelectChw,
 }: {
   doc: AnswerDoc;
   sources: string[];
   traceId: string | null;
+  traceUrl: string | null;
   onSelectChw?: (id: string) => void;
 }) {
   return (
@@ -160,7 +173,7 @@ export function AnswerCard({
           <SectionRenderer key={i} section={sec} onSelectChw={onSelectChw} />
         ))}
       </div>
-      <TraceFooter sources={sources} traceId={traceId} />
+      <TraceFooter sources={sources} traceId={traceId} traceUrl={traceUrl} />
     </article>
   );
 }
@@ -182,6 +195,7 @@ function SectionRenderer({
           title={section.title}
           body={section.body}
           evidence={section.evidence}
+          onSelectChw={onSelectChw}
         />
       );
     case "ranked":
@@ -201,12 +215,12 @@ function SectionRenderer({
 function TraceFooter({
   sources,
   traceId,
+  traceUrl,
 }: {
   sources: string[];
   traceId: string | null;
+  traceUrl: string | null;
 }) {
-  const langfuseHost =
-    process.env.NEXT_PUBLIC_LANGFUSE_HOST ?? "http://localhost:3100";
   const shortId = traceId ? traceId.slice(0, 8) : null;
   return (
     <div className="trace-footer">
@@ -216,10 +230,10 @@ function TraceFooter({
           {s}
         </span>
       ))}
-      {shortId && (
+      {shortId && traceUrl && (
         <a
           className="trace-footer__link inline-flex items-center gap-1"
-          href={`${langfuseHost}/trace/${traceId}`}
+          href={traceUrl}
           target="_blank"
           rel="noreferrer"
         >

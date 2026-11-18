@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from app.agents import formatter as formatter_mod
 from app.agents.briefing import BriefingResult, PlanStep
 from app.agents.formatter import (
     AnswerDoc,
@@ -139,6 +140,12 @@ class _FakeChoice:
 @dataclass
 class _FakeCompletion:
     choices: list[_FakeChoice]
+
+
+@pytest.fixture(autouse=True)
+def _no_langfuse(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep tests hermetic — never ship traces during pytest."""
+    monkeypatch.setattr(formatter_mod, "get_langfuse", lambda: None)
 
 
 class _FakeLLM:

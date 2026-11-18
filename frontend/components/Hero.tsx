@@ -28,21 +28,36 @@ export function Hero({ onAsk }: { onAsk: (q: string) => void }) {
   }, []);
 
   return (
-    <div className="max-w-[940px] mx-auto px-6 pt-12 pb-10">
-      <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--ink-3)] flex items-center gap-2 mb-5">
+    <div className="hero max-w-[1040px] mx-auto px-8 pt-14 pb-12">
+      <div className="hero-kicker">
         <span className="pulse-dot" />
-        {dateStr}
-      </p>
-      <h1 className="font-serif text-[44px] leading-[1.05] tracking-[-0.02em] max-w-[18ch]">
-        What <em className="italic" style={{ color: "var(--accent-ink)" }}>changed</em>{" "}
-        on the team this week?
-      </h1>
-      <p className="text-[15px] text-[var(--ink-2)] max-w-[56ch] mt-5">
-        Generate a Monday-morning briefing from FHIR data, ask follow-ups in
-        plain English, and inspect every tool call the agent made along the way.
-      </p>
+        <span>{dateStr}</span>
+        <span className="hero-kicker__line" />
+        <span>30 field workers</span>
+      </div>
 
-      <div className="flex gap-3 mt-7">
+      <div className="hero-heading-wrap">
+        <span className="hero-issue" aria-hidden="true">FIELD NOTE / 01</span>
+        <h1 className="hero-title">
+          What <em>changed</em><br />
+          in the field?
+        </h1>
+        <div className="hero-stamp" aria-hidden="true">
+          <span>FHIR</span>
+          <small>LIVE</small>
+        </div>
+      </div>
+
+      <div className="hero-intro">
+        <p>
+          Turn raw community health activity into a clear Monday brief—then
+          follow the evidence down to each worker, patient, and tool call.
+        </p>
+        <span className="hero-rule" />
+        <span className="hero-coordinate">0.2827° N<br />34.7519° E</span>
+      </div>
+
+      <div className="hero-actions flex gap-3 mt-8">
         <button
           className="btn-primary"
           onClick={() =>
@@ -51,7 +66,8 @@ export function Hero({ onAsk }: { onAsk: (q: string) => void }) {
             )
           }
         >
-          Generate Monday briefing
+          <span>Generate Monday briefing</span>
+          <span aria-hidden="true">→</span>
         </button>
         <button
           className="btn-ghost"
@@ -65,14 +81,14 @@ export function Hero({ onAsk }: { onAsk: (q: string) => void }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mt-9 max-w-[680px]">
+      <div className="suggestion-grid grid grid-cols-2 gap-3 mt-11 max-w-[760px]">
         {SUGGESTIONS.map((s) => (
           <button
             key={s.cat}
             className="suggestion"
             onClick={() => onAsk(s.q)}
           >
-            <div className="suggestion__cat">{s.cat}</div>
+            <div className="suggestion__cat">0{SUGGESTIONS.indexOf(s) + 1} / {s.cat}</div>
             <div className="suggestion__q">{s.q}</div>
           </button>
         ))}
