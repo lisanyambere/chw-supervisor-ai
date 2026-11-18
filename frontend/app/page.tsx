@@ -8,7 +8,11 @@ import { Composer } from "@/components/Composer";
 import { AiTurn, UserTurn, type Turn } from "@/components/Conversation";
 import { ChwDrawer } from "@/components/ChwDrawer";
 import { ActivityView } from "@/components/ActivityView";
-import { getReady, streamBriefing } from "@/lib/api";
+import { AnomaliesView } from "@/components/AnomaliesView";
+import { RosterView } from "@/components/RosterView";
+import { loadTurns, saveTurns } from "@/lib/persist";
+import { useLoad } from "@/lib/useLoad";
+import { getAnomalies, getReady, streamBriefing } from "@/lib/api";
 import { EMPTY_TEAM, applyFrame } from "@/lib/team";
 
 function uid() {
@@ -32,6 +36,11 @@ export default function HomePage() {
     "checking" | "ready" | "down"
   >("checking");
   const [langfuseUrl, setLangfuseUrl] = useState<string | null>(null);
+  const [chwCount, setChwCount] = useState<number | undefined>(undefined);
+  // Fetched once for the sidebar badge and shared with the Anomalies view.
+  const anomalies = useLoad((signal) => getAnomalies({ signal }));
+  // Saved turns load after mount: localStorage is not there during SSR.
+  const [restored, setRestored] = useState(false);
   const [backendReason, setBackendReason] = useState<string>(
     "Checking backend...",
   );
@@ -45,6 +54,20 @@ export default function HomePage() {
 
   useEffect(() => () => closeStream.current?.(), []);
 
+  useEffect(() => {
+    setTurns(loadTurns());
+    setRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (restored) saveTurns(turns);
+  }, [turns, restored]);
+
+  function newConversation() {
+    closeStream.current?.();
+    setTurns([]);
+  }
+
   // Mount-time backend probe. Aborts on unmount so a slow probe doesn't
   // setState after teardown.
   useEffect(() => {
@@ -52,6 +75,7 @@ export default function HomePage() {
     getReady({ signal: ctrl.signal })
       .then((r) => {
         setLangfuseUrl(r.langfuse_url ?? null);
+        setChwCount(r.chws_loaded);
         if (r.status === "ready") {
           setBackendStatus("ready");
           return;
@@ -192,12 +216,30 @@ export default function HomePage() {
 
   return (
     <div className="app-shell grid h-[100dvh]">
-      <Sidebar active={nav} onSelect={setNav} langfuseUrl={langfuseUrl} />
+      <Sidebar
+        active={nav}
+        onSelect={setNav}
+        langfuseUrl={langfuseUrl}
+        badges={{
+          alert:
+            anomalies.status === "ready" ? anomalies.data.action_count : undefined,
+          team: chwCount,
+        }}
+      />
       <div className="main-stage flex flex-col overflow-hidden">
-        <Topbar breadcrumb={`workspace / ${navLabel(nav)}`} />
+        <Topbar
+          breadcrumb={`workspace / ${navLabel(nav)}`}
+          onNewConversation={
+            nav === "brief" && turns.length > 0 && !busy ? newConversation : undefined
+          }
+        />
         <main ref={scrollRef} onScroll={onScroll} className="content-scroll flex-1 overflow-y-auto">
           {nav === "chart" ? (
             <ActivityView />
+          ) : nav === "team" ? (
+            <RosterView onSelectChw={setDrawerChw} />
+          ) : nav === "alert" ? (
+            <AnomaliesView state={anomalies} onSelectChw={setDrawerChw} onAsk={ask} />
           ) : isEmpty ? (
             <Hero onAsk={ask} />
           ) : (

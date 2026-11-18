@@ -176,6 +176,90 @@ export async function getChwDetail(
   return (await res.json()) as ChwDetail;
 }
 
+// ─── /chws (roster) and /anomalies ──────────────────────────────────────────
+
+export type ActivityPattern = "stopped_early" | "started_late" | "no_visits";
+
+export type RosterRow = {
+  chw_id: string;
+  name: string | null;
+  ward: string | null;
+  encounters_30d: number;
+  encounters_7d: number;
+  pattern: ActivityPattern | null;
+  last_active: string | null;
+};
+
+export async function getRoster(
+  opts: { signal?: AbortSignal } = {},
+): Promise<RosterRow[]> {
+  const res = await fetch(`${BACKEND_URL}/chws`, { signal: opts.signal });
+  if (!res.ok) throw new Error(`Roster lookup failed: ${res.status}`);
+  return ((await res.json()) as { chws: RosterRow[] }).chws;
+}
+
+export type FeverCluster = {
+  ward: string;
+  case_count: number;
+  malaria_diagnosed: number;
+  chw_ids: string[];
+  first_date: string;
+  last_date: string;
+};
+
+export type DangerSignChild = {
+  patient_name: string;
+  age_months: number;
+  respiratory_rate: number;
+  temperature_c: number | null;
+  chw_id: string | null;
+  ward: string | null;
+  date: string;
+};
+
+export type OverduePatient = {
+  patient_name: string;
+  last_visit: string;
+  return_date: string;
+  days_overdue: number;
+  pregnant: boolean;
+  last_systolic_bp: number | null;
+  chw_id: string | null;
+  ward: string | null;
+};
+
+export type ActivityGap = {
+  chw_id: string;
+  pattern: ActivityPattern;
+  first_active: string | null;
+  last_active: string | null;
+  weekdays_missed_before_team_last_active: number;
+};
+
+export type Anomalies = {
+  days: number;
+  action_count: number;
+  fever_clusters: FeverCluster[];
+  children: DangerSignChild[];
+  overdue: OverduePatient[];
+  activity_gaps: { team_last_active: string | null; rows: ActivityGap[] };
+  missing_location: {
+    total_missing_location: number;
+    rows: { chw_id: string; ward: string | null; missing_location: number; weeks: Record<string, number> }[];
+  };
+  visits_after_death: {
+    rows: { patient_name: string; death_date: string; visit_date: string; chw_id: string | null; ward: string | null }[];
+  };
+};
+
+export async function getAnomalies(
+  opts: { signal?: AbortSignal } = {},
+): Promise<Anomalies> {
+  const res = await fetch(`${BACKEND_URL}/anomalies`, { signal: opts.signal });
+  if (!res.ok) throw new Error(`Anomaly check failed: ${res.status}`);
+  return (await res.json()) as Anomalies;
+}
+
 // ─── /activity/daily (activity chart) ───────────────────────────────────────
 
 export type DailyActivity = {

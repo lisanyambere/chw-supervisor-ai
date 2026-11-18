@@ -5,9 +5,12 @@ import { useEffect, useState } from "react";
 export function Topbar({
   breadcrumb,
   status = "fhir · langfuse · azure",
+  onNewConversation,
 }: {
   breadcrumb: string;
   status?: string;
+  /** Shown as a "New conversation" button when there is one to clear. */
+  onNewConversation?: () => void;
 }) {
   // Client-only to avoid SSR/CSR hydration mismatch on the date string.
   const [dateStr, setDateStr] = useState<string>("");
@@ -33,6 +36,11 @@ export function Topbar({
         <div className="topbar-breadcrumb truncate">{breadcrumb}</div>
       </div>
       <div className="flex items-center gap-3">
+        {onNewConversation && (
+          <button className="topbar-new" type="button" onClick={onNewConversation}>
+            New conversation
+          </button>
+        )}
         <div className="topbar-date">{dateStr}</div>
         <div className="system-status">
           <span className="pulse-dot pulse-dot--ok" />

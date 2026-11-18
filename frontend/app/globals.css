@@ -618,7 +618,35 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .team-verify--warn svg { color: var(--warn); }
 
 /* ─── Activity chart ────────────────────────────────────────────────── */
-.activity-title { margin-top: 18px; font: 400 40px/1 var(--font-serif); letter-spacing: -.035em; }
+.view { max-width: 940px; margin: 0 auto; padding: 32px 24px 24px; }
+.view-title { margin-top: 18px; font: 400 40px/1 var(--font-serif); letter-spacing: -.035em; }
+.ans--flush { padding: 0; overflow: hidden; }
+.roster-row { grid-template-columns: 72px 1fr 16px; }
+.roster-flag {
+  margin-left: 8px; padding: 1px 6px;
+  background: var(--warn-bg); color: var(--ink-2);
+  font: 400 10px var(--font-mono); text-transform: uppercase; letter-spacing: .04em;
+  white-space: nowrap;
+}
+.anomalies { display: grid; gap: 18px; margin-top: 22px; }
+.anomaly-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+}
+.ranked__head + .anomaly-row { border-top: 0; }
+.anomaly-row.is-clickable { cursor: pointer; }
+.anomaly-row.is-clickable:hover { background: var(--surface-2); }
+.anomaly-row__chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.anomalies__empty { padding: 12px 14px; color: var(--ink-3); font-size: 13px; }
+.anomalies__ask { justify-self: start; }
+.topbar-new {
+  padding: 4px 9px;
+  border: 1px solid var(--line-2); background: transparent; color: var(--ink-2);
+  font: 400 10px var(--font-mono); text-transform: uppercase; letter-spacing: .06em;
+  cursor: pointer;
+}
+.topbar-new:hover { background: var(--surface-2); }
 .activity-head { font: 400 22px/1.3 var(--font-serif); letter-spacing: -.01em; text-wrap: pretty; padding-right: 48px; }
 .activity-meta {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
@@ -788,7 +816,11 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   .sidebar .nav-item { border-right: 0; border-bottom: 2px solid transparent; padding: 10px; }
   .sidebar .nav-item--active { border-bottom-color: var(--sun); }
   .sidebar-systems, .user-block { display: none; }
-  .activity-title { font-size: 30px; }
+  .view { padding: 24px 16px 16px; }
+  .view-title { font-size: 30px; }
+  .anomaly-row { grid-template-columns: 1fr; }
+  .anomaly-row__chips { justify-content: flex-start; }
+  .roster-flag { display: inline-block; margin: 4px 0 0; }
   .activity-toggle { margin-left: 0; }
   .topbar { padding-inline: 16px; }
   .topbar-date { display: none; }

@@ -13,10 +13,10 @@ import { cn } from "@/lib/cn";
 
 type NavId = "brief" | "alert" | "team" | "patient" | "chart";
 
-const NAV: { id: NavId; label: string; icon: React.ReactNode; badge?: string; tone?: "alert" }[] = [
+const NAV: { id: NavId; label: string; icon: React.ReactNode; tone?: "alert" }[] = [
   { id: "brief",   label: "Monday briefing", icon: <FileText size={14} /> },
-  { id: "alert",   label: "Anomalies",       icon: <AlertTriangle size={14} />, badge: "2", tone: "alert" },
-  { id: "team",    label: "CHW roster",      icon: <Users size={14} />,        badge: "30" },
+  { id: "alert",   label: "Anomalies",       icon: <AlertTriangle size={14} />, tone: "alert" },
+  { id: "team",    label: "CHW roster",      icon: <Users size={14} /> },
   { id: "patient", label: "Patient lookup",  icon: <Search size={14} /> },
   { id: "chart",   label: "Activity charts", icon: <BarChart3 size={14} /> },
 ];
@@ -33,10 +33,13 @@ export function Sidebar({
   active,
   onSelect,
   langfuseUrl,
+  badges,
 }: {
   active: NavId;
   onSelect: (id: NavId) => void;
   langfuseUrl: string | null;
+  /** Counts shown beside nav items; absent until known. */
+  badges: Partial<Record<NavId, number>>;
 }) {
   const obs = langfuseUrl
     ? [{ label: "langfuse", href: langfuseUrl }, ...LOCAL_OBS]
@@ -70,9 +73,9 @@ export function Sidebar({
             >
               <span className="nav-icon">{n.icon}</span>
               <span>{n.label}</span>
-              {n.badge && (
+              {badges[n.id] !== undefined && (
                 <span className={cn("nav-badge", n.tone === "alert" && "nav-badge--alert")}>
-                  {n.badge}
+                  {badges[n.id]}
                 </span>
               )}
             </button>

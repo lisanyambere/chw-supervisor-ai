@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getDailyActivity, type DailyActivity, type DailyCount } from "@/lib/api";
+import { useState } from "react";
+import { getDailyActivity, type DailyCount } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { useLoad } from "@/lib/useLoad";
+import { LoadNote, ViewHeader } from "@/components/ViewHeader";
 
 const DAYS = 30;
-
-type LoadState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ready"; data: DailyActivity };
 
 type Day = DailyCount & { weekend: boolean; missed: boolean };
 
@@ -40,43 +37,21 @@ export function classifyDays(series: DailyCount[]): Day[] {
 }
 
 export function ActivityView() {
-  const [state, setState] = useState<LoadState>({ status: "loading" });
+  const state = useLoad((signal) => getDailyActivity(DAYS, { signal }));
   const [asTable, setAsTable] = useState(false);
 
-  useEffect(() => {
-    const ctrl = new AbortController();
-    getDailyActivity(DAYS, { signal: ctrl.signal })
-      .then((data) => setState({ status: "ready", data }))
-      .catch((e: unknown) => {
-        if (e instanceof DOMException && e.name === "AbortError") return;
-        setState({
-          status: "error",
-          message: e instanceof Error ? e.message : "Activity lookup failed.",
-        });
-      });
-    return () => ctrl.abort();
-  }, []);
-
   return (
-    <div className="max-w-[940px] mx-auto px-6 pt-8 pb-6">
-      <div className="hero-kicker">
-        <span className="pulse-dot pulse-dot--ok" />
-        Activity · last {DAYS} days
-      </div>
-      <h1 className="activity-title">Daily team encounters across Kakamega</h1>
+    <div className="view">
+      <ViewHeader
+        kicker={`Activity · last ${DAYS} days`}
+        title="Daily team encounters across Kakamega"
+      />
 
       <article className="ans ans--plain mt-5">
         <div className="ans__period">
           visits_by_day({DAYS}) · per FHIR Encounter.period.start
         </div>
-        {state.status === "loading" && (
-          <div className="drawer__note">Loading from OpenMRS…</div>
-        )}
-        {state.status === "error" && (
-          <div className="drawer__note drawer__note--alert" role="alert">
-            {state.message}
-          </div>
-        )}
+        <LoadNote state={state} />
         {state.status === "ready" && (
           <Chart
             days={classifyDays(state.data.series)}
