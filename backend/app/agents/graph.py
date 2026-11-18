@@ -103,7 +103,7 @@ SPECIALISTS: dict[str, dict[str, Any]] = {
         "guidance": """\
 - For a general briefing check both tools.
 - Say which CHWs the problem records belong to, so the supervisor knows whom
-  to ask.
+  to ask, and which week the records fall in.
 """,
     },
 }

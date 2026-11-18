@@ -241,6 +241,8 @@ def build_resources(patients: list[dict]) -> tuple[list[dict], list[dict]]:
     """
     resources: list[dict] = [make_practitioner(chw) for chw in CHWS]
     scenarios: list[dict] = []
+    # How scenario descriptions name the demo week, e.g. "the week of 9 Nov".
+    week = f"the week of {DEMO_WEEK_START.day} {DEMO_WEEK_START:%b}"
 
     living = [p for p in patients if not p["deceased"]]
     deceased = [p for p in patients if p["deceased"]]
@@ -288,8 +290,8 @@ def build_resources(patients: list[dict]) -> tuple[list[dict], list[dict]]:
     scenarios.append({
         "id": "chw_disengagement",
         "title": "A CHW stopped visiting mid-week",
-        "expect": f"{mary['id']} ({mary['first']} {mary['last']}) logged visits on Monday and Tuesday of the "
-                  "latest week and none from Wednesday to Friday.",
+        "expect": f"{mary['id']} ({mary['first']} {mary['last']}) logged visits on Monday and Tuesday of "
+                  f"{week} and none from Wednesday to Friday.",
         "chw_ids": [mary["id"]],
     })
     scenarios.append({
@@ -356,7 +358,7 @@ def build_resources(patients: list[dict]) -> tuple[list[dict], list[dict]]:
     scenarios.append({
         "id": "missing_location",
         "title": "Visits with no location recorded",
-        "expect": "14 visits in the latest week were saved without a location.",
+        "expect": f"14 visits in {week} were saved without a location.",
         "count": 14,
     })
 
@@ -371,7 +373,7 @@ def build_resources(patients: list[dict]) -> tuple[list[dict], list[dict]]:
     scenarios.append({
         "id": "visits_after_death",
         "title": "Visits logged for deceased patients",
-        "expect": "3 visits in the latest week were logged for patients whose death was recorded earlier.",
+        "expect": f"3 visits in {week} were logged for patients whose death was recorded earlier.",
         "count": 3,
         "patient_ids": [p["id"] for p in after_death],
         "chw_ids": after_death_chws,

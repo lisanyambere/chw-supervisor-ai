@@ -1,6 +1,8 @@
 """Data-quality tools: records that cannot be right as written."""
+
 from __future__ import annotations
 
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from app.fhir import FhirClient, get_id_map
@@ -24,43 +26,80 @@ _DAYS = {
 @tool(
     name="visits_missing_location",
     description=(
-        "Visits in the last N days that were saved without a location, per CHW. "
-        "A visit with no location cannot be verified as having happened in the "
-        "household, so a CHW with many of them needs a device or training check."
+        "Visits in the last N days that were saved without a location, per CHW "
+        "and per week (weeks start on Monday), so you can say whether they are "
+        "recent. A visit with no location cannot be verified as having happened "
+        "in the household, so a CHW with many of them needs a device or "
+        "training check."
     ),
     parameters={"type": "object", "properties": {"days": _DAYS}, "required": []},
 )
 async def visits_missing_location(client: FhirClient, days: int = 7) -> dict[str, Any]:
     idmap = get_id_map()
-    since = since_date(days)
+    today = datetime.now(tz=UTC).date()
+    since = today - timedelta(days=days)
+    # Weeks overlapping the window, clipped to it: [(start, end_exclusive)].
+    weeks: list[tuple[date, date]] = []
+    start = since
+    while start <= today:
+        end = min(
+            start + timedelta(days=7 - start.weekday()), today + timedelta(days=1)
+        )
+        weeks.append((start, end))
+        start = end
 
-    async def _for_chw(chw_id: str, uuid: str) -> dict[str, Any]:
-        window = {"participant": uuid, "date": f"ge{since}"}
+    async def _missing(uuid: str, ward_uuid: str | None, lo: date, hi: date) -> int:
+        window = {
+            "participant": uuid,
+            "date": [f"ge{lo}T00:00:00Z", f"lt{hi}T00:00:00Z"],
+        }
         total = await client.count("Encounter", params=window)
         # Every located visit a CHW makes is in their home ward.
-        ward_uuid = idmap.wards.get(idmap.chw_wards.get(chw_id, ""))
         located = (
             await client.count("Encounter", params={**window, "location": ward_uuid})
             if ward_uuid
             else 0
         )
-        return {
-            "chw_id": chw_id,
-            "ward": idmap.chw_wards.get(chw_id),
-            "visits": total,
-            "missing_location": total - located,
-        }
+        return total - located
 
-    per_chw = await gather_bounded(
-        _for_chw(chw_id, uuid) for chw_id, uuid in sorted(idmap.practitioners.items())
+    chws = sorted(idmap.practitioners.items())
+    counts = await gather_bounded(
+        _missing(uuid, idmap.wards.get(idmap.chw_wards.get(chw_id, "")), lo, hi)
+        for chw_id, uuid in chws
+        for lo, hi in weeks
     )
-    rows = [r for r in per_chw if r["missing_location"] > 0]
+
+    rows: list[dict[str, Any]] = []
+    for i, (chw_id, _) in enumerate(chws):
+        per_week = counts[i * len(weeks) : (i + 1) * len(weeks)]
+        if not any(per_week):
+            continue
+        rows.append(
+            {
+                "chw_id": chw_id,
+                "ward": idmap.chw_wards.get(chw_id),
+                "missing_location": sum(per_week),
+                "weeks": {
+                    lo.isoformat(): n
+                    for (lo, _), n in zip(weeks, per_week, strict=True)
+                    if n
+                },
+            }
+        )
     rows.sort(key=lambda r: r["missing_location"], reverse=True)
+    by_week = [
+        {
+            "week_start": lo.isoformat(),
+            "week_end": (hi - timedelta(days=1)).isoformat(),
+            "missing_location": sum(counts[j :: len(weeks)]),
+        }
+        for j, (lo, hi) in enumerate(weeks)
+    ]
     return {
         "days": days,
-        "since": since,
-        "total_visits": sum(r["visits"] for r in per_chw),
+        "since": since.isoformat(),
         "total_missing_location": sum(r["missing_location"] for r in rows),
+        "by_week": by_week,
         "rows": rows,
     }
 
