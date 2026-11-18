@@ -83,6 +83,7 @@ export type BriefingResponse = {
   iterations: number;
   tool_calls: number;
   trace_id: string | null;
+  trace_url?: string | null; // this run's trace in the Langfuse UI
   plan: PlanStep[];
   answer_doc: AnswerDoc | null;
 } & TeamDetail;
@@ -131,6 +132,7 @@ export type ReadinessResponse = {
   llm_model: string;
   patients_loaded: number;
   chws_loaded: number;
+  langfuse_url: string | null; // Langfuse project page; null when tracing is off
 };
 
 export async function getReady(
@@ -234,6 +236,7 @@ export type ResponseFrame = {
   tool_calls: number;
   plan: PlanStep[];
   trace_id: string | null;
+  trace_url?: string | null; // this run's trace in the Langfuse UI
   answer_doc: AnswerDoc | null;
 } & TeamDetail;
 

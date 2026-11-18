@@ -129,6 +129,8 @@ class BriefingResult:
     # Langfuse trace id (when observability is enabled), so callers can attach
     # post-hoc evaluator scores to the same trace.
     trace_id: str | None = None
+    # Link to that trace in the Langfuse UI.
+    trace_url: str | None = None
     # Compact, ordered list of tool executions — derived from `trace` at
     # build time so /briefing consumers don't have to do it themselves.
     plan: list[PlanStep] = field(default_factory=list)
@@ -197,6 +199,7 @@ async def run_briefing(
                     tid = getattr(agent_span, "trace_id", None)
                     if tid:
                         result.trace_id = str(tid)
+                        result.trace_url = lf.get_trace_url(trace_id=str(tid))
                     tool_plan = [
                         f"{e.agent}:{e.name}"
                         for e in result.trace

@@ -14,6 +14,7 @@ export type Turn =
       doc: AnswerDoc | null;
       sources: string[];
       traceId: string | null;
+      traceUrl: string | null;
       done: boolean;
     };
 
@@ -54,6 +55,7 @@ export function AiTurn({
           doc={turn.doc}
           sources={turn.sources}
           traceId={turn.traceId}
+          traceUrl={turn.traceUrl}
           onSelectChw={onSelectChw}
         />
       )}

@@ -21,20 +21,26 @@ const NAV: { id: NavId; label: string; icon: React.ReactNode; badge?: string; to
   { id: "chart",   label: "Activity charts", icon: <BarChart3 size={14} /> },
 ];
 
-const OBS = [
-  { label: "langfuse",   href: "http://localhost:3100" },
-  { label: "grafana",    href: "http://localhost:3001" },
-  { label: "openmrs",    href: "http://localhost:8080/openmrs" },
+// Local services from infra/docker-compose*.yml. Langfuse is Langfuse Cloud;
+// its project link comes from the backend's /readyz.
+const LOCAL_OBS = [
+  { label: "grafana",    href: "http://localhost:3200" },
+  { label: "openmrs",    href: "http://localhost:8081/openmrs/spa" },
   { label: "prometheus", href: "http://localhost:9090" },
 ];
 
 export function Sidebar({
   active,
   onSelect,
+  langfuseUrl,
 }: {
   active: NavId;
   onSelect: (id: NavId) => void;
+  langfuseUrl: string | null;
 }) {
+  const obs = langfuseUrl
+    ? [{ label: "langfuse", href: langfuseUrl }, ...LOCAL_OBS]
+    : LOCAL_OBS;
   return (
     <aside className="sidebar flex flex-col">
       {/* Brand block */}
@@ -80,7 +86,7 @@ export function Sidebar({
           Systems
         </div>
         <nav className="flex flex-col gap-0.5">
-          {OBS.map((o) => (
+          {obs.map((o) => (
             <a
               key={o.label}
               href={o.href}

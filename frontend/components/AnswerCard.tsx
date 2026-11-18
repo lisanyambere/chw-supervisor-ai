@@ -155,11 +155,13 @@ export function AnswerCard({
   doc,
   sources,
   traceId,
+  traceUrl,
   onSelectChw,
 }: {
   doc: AnswerDoc;
   sources: string[];
   traceId: string | null;
+  traceUrl: string | null;
   onSelectChw?: (id: string) => void;
 }) {
   return (
@@ -171,7 +173,7 @@ export function AnswerCard({
           <SectionRenderer key={i} section={sec} onSelectChw={onSelectChw} />
         ))}
       </div>
-      <TraceFooter sources={sources} traceId={traceId} />
+      <TraceFooter sources={sources} traceId={traceId} traceUrl={traceUrl} />
     </article>
   );
 }
@@ -213,12 +215,12 @@ function SectionRenderer({
 function TraceFooter({
   sources,
   traceId,
+  traceUrl,
 }: {
   sources: string[];
   traceId: string | null;
+  traceUrl: string | null;
 }) {
-  const langfuseHost =
-    process.env.NEXT_PUBLIC_LANGFUSE_HOST ?? "http://localhost:3100";
   const shortId = traceId ? traceId.slice(0, 8) : null;
   return (
     <div className="trace-footer">
@@ -228,10 +230,10 @@ function TraceFooter({
           {s}
         </span>
       ))}
-      {shortId && (
+      {shortId && traceUrl && (
         <a
           className="trace-footer__link inline-flex items-center gap-1"
-          href={`${langfuseHost}/trace/${traceId}`}
+          href={traceUrl}
           target="_blank"
           rel="noreferrer"
         >

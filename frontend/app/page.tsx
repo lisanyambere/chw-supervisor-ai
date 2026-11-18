@@ -31,6 +31,7 @@ export default function HomePage() {
   const [backendStatus, setBackendStatus] = useState<
     "checking" | "ready" | "down"
   >("checking");
+  const [langfuseUrl, setLangfuseUrl] = useState<string | null>(null);
   const [backendReason, setBackendReason] = useState<string>(
     "Checking backend...",
   );
@@ -50,6 +51,7 @@ export default function HomePage() {
     const ctrl = new AbortController();
     getReady({ signal: ctrl.signal })
       .then((r) => {
+        setLangfuseUrl(r.langfuse_url ?? null);
         if (r.status === "ready") {
           setBackendStatus("ready");
           return;
@@ -99,6 +101,7 @@ export default function HomePage() {
       doc: null,
       sources: [],
       traceId: null,
+      traceUrl: null,
       done: false,
     };
     setTurns((prev) => [...prev, userTurn, placeholder]);
@@ -123,6 +126,7 @@ export default function HomePage() {
                 doc: frame.answer_doc,
                 sources: frame.answer_doc?.sources ?? [],
                 traceId: frame.trace_id,
+                traceUrl: frame.trace_url ?? null,
                 done: true,
               };
             }
@@ -188,7 +192,7 @@ export default function HomePage() {
 
   return (
     <div className="app-shell grid h-[100dvh]">
-      <Sidebar active={nav} onSelect={setNav} />
+      <Sidebar active={nav} onSelect={setNav} langfuseUrl={langfuseUrl} />
       <div className="main-stage flex flex-col overflow-hidden">
         <Topbar breadcrumb={`workspace / ${navLabel(nav)}`} />
         <main ref={scrollRef} onScroll={onScroll} className="content-scroll flex-1 overflow-y-auto">

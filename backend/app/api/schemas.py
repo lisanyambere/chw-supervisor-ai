@@ -21,6 +21,8 @@ class ReadinessResponse(BaseModel):
     llm_model: str
     patients_loaded: int
     chws_loaded: int
+    # Langfuse project page; None when tracing is off.
+    langfuse_url: str | None = None
 
 
 class BriefingRequest(BaseModel):
@@ -96,6 +98,7 @@ class BriefingResponse(BaseModel):
     trace: list[TraceEntry] = Field(default_factory=list)
     plan: list[PlanStepOut] = Field(default_factory=list)
     trace_id: str | None = None
+    trace_url: str | None = None  # this run's trace in the Langfuse UI
     # New: structured answer for the UI. Optional so the endpoint can skip
     # the second LLM call (and its latency cost) when the caller asks.
     answer_doc: AnswerDocOut | None = None

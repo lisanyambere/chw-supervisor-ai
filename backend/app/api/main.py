@@ -33,7 +33,7 @@ from app.core import configure_logging, get_logger, get_settings
 from app.fhir import FhirClient, get_id_map
 from app.llm import get_llm
 from app.observability import aflush as langfuse_flush
-from app.observability import get_langfuse, metrics_router
+from app.observability import get_langfuse, langfuse_project_url, metrics_router
 from app.observability.metrics import REQUEST_LATENCY
 from app.tools.chw import chw_patient_panel, count_chw_encounters, visits_by_day
 
@@ -153,6 +153,7 @@ async def readyz(fhir: FhirClient = Depends(get_fhir)) -> Response:
         llm_model=model,
         patients_loaded=len(idmap.patients),
         chws_loaded=len(idmap.practitioners),
+        langfuse_url=langfuse_project_url(),
     )
     return JSONResponse(
         content=body.model_dump(),
@@ -202,6 +203,7 @@ async def briefing(
         trace=trace,
         plan=[PlanStepOut(**vars(s)) for s in result.plan],
         trace_id=result.trace_id,
+        trace_url=result.trace_url,
         answer_doc=answer_doc,
         **_team_detail(result),
     )
@@ -333,6 +335,7 @@ async def briefing_stream(
                     "tool_calls": result.tool_calls,
                     "plan": [vars(p) for p in result.plan],
                     "trace_id": result.trace_id,
+                    "trace_url": result.trace_url,
                     "answer_doc": answer_doc_dict,
                     **_team_detail(result),
                 }
