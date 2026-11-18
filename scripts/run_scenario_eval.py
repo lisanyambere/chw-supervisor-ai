@@ -42,6 +42,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT / "backend"))
 
 from app.agents import format_answer, run_briefing  # noqa: E402
+from app.core import get_settings  # noqa: E402
 from app.evaluators.recall import (  # noqa: E402
     flatten_answer_doc,
     judge_flags,
@@ -49,7 +50,7 @@ from app.evaluators.recall import (  # noqa: E402
     mentions,
 )
 from app.evaluators.scorers import ungrounded_numbers  # noqa: E402
-from app.llm import get_llm  # noqa: E402
+from app.llm import get_llm, metered  # noqa: E402
 from app.observability import get_langfuse  # noqa: E402
 
 QUESTION = "Give me the Monday-morning briefing for the team."
@@ -69,16 +70,20 @@ def _patient_names(patient_ids: set[str]) -> dict[str, str]:
 async def _one_run(
     index: int, scenarios: list[dict[str, Any]], names: dict[str, str], push: bool
 ) -> dict[str, Any]:
-    started = time.perf_counter()
-    result = await run_briefing(QUESTION)
-    seconds = time.perf_counter() - started
-    doc = await format_answer(result, QUESTION)
+    # What a supervisor's briefing costs (agents + answer card), metered apart
+    # from what grading it costs.
+    with metered() as briefing_usage:
+        started = time.perf_counter()
+        result = await run_briefing(QUESTION)
+        seconds = time.perf_counter() - started
+        doc = await format_answer(result, QUESTION)
     card_text = flatten_answer_doc(doc.to_dict())
 
-    judged, flags = await asyncio.gather(
-        asyncio.gather(*(judge_recall(s, result.answer, names) for s in scenarios)),
-        judge_flags(result.answer, scenarios),
-    )
+    with metered() as judge_usage:
+        judged, flags = await asyncio.gather(
+            asyncio.gather(*(judge_recall(s, result.answer, names) for s in scenarios)),
+            judge_flags(result.answer, scenarios),
+        )
     per_scenario = {
         s["id"]: {
             "judged": bool(j.value),
@@ -102,10 +107,13 @@ async def _one_run(
     print(
         f"run {index}: {found}/{len(scenarios)} scenarios, "
         f"{unplanted}/{len(flags)} flags unplanted, {seconds:.0f}s, "
-        f"{result.tool_calls} tool calls, grounded={result.verification['grounded']}"
+        f"{result.tool_calls} tool calls, grounded={result.verification['grounded']}, "
+        f"${briefing_usage.cost_usd() or 0:.3f}"
     )
     return {
         "run": index,
+        "usage": briefing_usage.to_dict(),
+        "judge_usage": judge_usage.to_dict(),
         "trace_id": result.trace_id,
         "seconds": round(seconds, 1),
         "llm_calls": result.iterations,
@@ -175,8 +183,11 @@ def _report(
         f"- Time per briefing: {mean(r['seconds'] for r in runs):.0f}s on average "
         f"(min {min(r['seconds'] for r in runs):.0f}s, "
         f"max {max(r['seconds'] for r in runs):.0f}s)",
-        f"- Per briefing: {mean(r['llm_calls'] for r in runs):.1f} LLM calls, "
-        f"{mean(r['tool_calls'] for r in runs):.1f} tool calls",
+        f"- Per briefing: {mean(r['usage']['calls'] for r in runs):.1f} LLM calls "
+        f"(including the answer card), {mean(r['tool_calls'] for r in runs):.1f} "
+        f"tool calls, {mean(r['usage']['input_tokens'] for r in runs):,.0f} input "
+        f"and {mean(r['usage']['output_tokens'] for r in runs):,.0f} output tokens",
+        *_cost_lines(runs),
         "",
         "## What this measures, and what it does not",
         "",
@@ -210,6 +221,22 @@ def _report(
     )
     lines += [f"- {f}" for f in unplanted] or ["None."]
     return "\n".join(lines) + "\n"
+
+
+def _cost_lines(runs: list[dict[str, Any]]) -> list[str]:
+    costs = [r["usage"]["cost_usd"] for r in runs]
+    if any(c is None for c in costs):
+        return ["- Cost: no prices configured (LLM_PRICE_* unset)"]
+    s = get_settings()
+    judging = sum(r["judge_usage"]["cost_usd"] or 0 for r in runs)
+    return [
+        f"- Estimated cost per briefing: ${mean(costs):.3f} "
+        f"(min ${min(costs):.3f}, max ${max(costs):.3f}) at "
+        f"${s.llm_price_input_per_mtok:g} / ${s.llm_price_output_per_mtok:g} per "
+        "million input / output tokens",
+        f"- This evaluation: ${sum(costs):.2f} for the briefings and "
+        f"${judging:.2f} for the judges",
+    ]
 
 
 def calibration_note() -> str:
