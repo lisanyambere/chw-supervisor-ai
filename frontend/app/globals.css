@@ -816,6 +816,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   .sidebar .nav-item { border-right: 0; border-bottom: 2px solid transparent; padding: 10px; }
   .sidebar .nav-item--active { border-bottom-color: var(--sun); }
   .sidebar-systems, .user-block { display: none; }
+  /* The corner tag would sit on the period line at this width. */
+  .ans::before { content: none; }
   .view { padding: 24px 16px 16px; }
   .view-title { font-size: 30px; }
   .anomaly-row { grid-template-columns: 1fr; }
