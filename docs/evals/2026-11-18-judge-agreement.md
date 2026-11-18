@@ -5,6 +5,7 @@ The 5 briefings from `2026-11-18-scenario-recall-cost.json`, each graded against
 | Judge | Real findings found | Decoys rejected | Agrees with project judge | Cohen's kappa |
 |---|---|---|---|---|
 | `gpt-5.5 (project judge)` | 35/35 | 25/25 | 60/60 | 1.00 |
+| `anthropic/claude-haiku-5.5` | 35/35 | 25/25 | 60/60 | 1.00 |
 
 ## Where the judges disagree
 

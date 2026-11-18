@@ -12,9 +12,10 @@ See `docs/portfolio-handover.md` for the portfolio plan. Remaining, in order:
 - **Cut the formatting call.** Traces show the answer-card formatter takes
   about 18 s and a third of each briefing's cost. Have the lead analyst emit
   the card schema directly and keep the formatter as a fallback.
-- **Cross-check the judge with other model families.** Needs a working
-  `OPENROUTER_API_KEY` in `.env` (the current one returns 401). Then run
-  `python scripts/calibrate_judge.py cross docs/evals/2026-11-18-scenario-recall-cost.json --model anthropic/claude-sonnet-5.5 --model google/gemini-3.8-flash`.
+- **Human check of the judge.** Gpt-5.5 and Claude Haiku 5.5 agree on all 60
+  findings and decoys (`docs/evals/2026-11-18-judge-agreement.md`). A rating
+  by someone who supervises CHWs is the remaining check:
+  `scripts/calibrate_judge.py export` then `score`.
 
 ## Phase 4 — Supervisor frontend (in progress)
 

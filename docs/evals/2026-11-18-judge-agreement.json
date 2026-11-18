@@ -171,31 +171,31 @@
       },
       "1:decoy_wrong_chw_quiet": {
         "found": false,
-        "reason": "The briefing does not report chw-004 stopping after Tuesday and instead names chw-001 with no other start/stop patterns."
+        "reason": "The briefing does not report chw-004 stopping after Tuesday and instead says there were no other unusual start/stop patterns."
       },
       "1:decoy_wrong_ward_cluster": {
         "found": false,
-        "reason": "The briefing reports the 8 malaria fever cases in Lurambi, not Butere ward."
+        "reason": "The briefing reports the 8-case malaria fever cluster in Lurambi, not the required Butere ward."
       },
       "1:decoy_wrong_location_count": {
         "found": false,
-        "reason": "The briefing reports 14 missing-location visits, not the true finding of 20."
+        "reason": "The briefing reports 14 missing-location visits, contradicting the finding of 20."
       },
       "1:decoy_wrong_death_count": {
         "found": false,
-        "reason": "The briefing reports 3 post-death visit records, contradicting the finding that there were 5."
+        "reason": "The briefing reports 3 post-death records, contradicting the finding of 5 visits."
       },
       "1:decoy_wrong_bp": {
         "found": false,
-        "reason": "The briefing lists an overdue pregnant patient with systolic BP 145, not 165."
+        "reason": "The briefing reports the overdue pregnant patient\u2019s systolic BP as 145, not the finding\u2019s 165."
       },
       "2:decoy_wrong_chw_quiet": {
         "found": false,
-        "reason": "The briefing does not state that chw-004 was active only Monday and Tuesday and inactive Wednesday through Friday."
+        "reason": "The briefing says chw-001 stopped mid-week, not that chw-004 had visits only Monday and Tuesday and none Wednesday to Friday."
       },
       "2:decoy_wrong_ward_cluster": {
         "found": false,
-        "reason": "The briefing reports the 8 malaria fever cases in Lurambi, not Butere ward."
+        "reason": "The briefing reports the 8 malaria fever cases in Lurambi, not the required Butere ward."
       },
       "2:decoy_wrong_location_count": {
         "found": false,
@@ -207,67 +207,309 @@
       },
       "2:decoy_wrong_bp": {
         "found": false,
-        "reason": "The briefing lists an overdue pregnant patient but gives last systolic BP as 145, not 165."
+        "reason": "The briefing lists an overdue pregnant patient with last systolic BP 145, not 165."
       },
       "3:decoy_wrong_chw_quiet": {
         "found": false,
-        "reason": "The briefing reports a mid-week activity gap for chw-001, not the required chw-004 Monday-Tuesday-only pattern."
+        "reason": "The briefing attributes the mid-week activity gap to chw-001, not the required chw-004 Monday-Tuesday only pattern."
       },
       "3:decoy_wrong_ward_cluster": {
         "found": false,
-        "reason": "The briefing reports the 8-case malaria fever cluster in Lurambi, but the finding requires Butere ward."
+        "reason": "The briefing places the 8 malaria fever cases in Lurambi instead of the required Butere ward."
       },
       "3:decoy_wrong_location_count": {
         "found": false,
-        "reason": "The briefing reports 14 visits without location, contradicting the finding that there were 20."
+        "reason": "The briefing reports 14 visits without location, not the required 20."
       },
       "3:decoy_wrong_death_count": {
         "found": false,
-        "reason": "The briefing reports 3 visits after recorded death, contradicting the true finding of 5 visits."
+        "reason": "The briefing reports 3 visits after recorded death instead of the true finding of 5."
       },
       "3:decoy_wrong_bp": {
         "found": false,
-        "reason": "The briefing lists an overdue pregnant patient but gives last systolic BP as 145, not the required 165."
+        "reason": "The briefing mentions an overdue pregnant patient but reports last systolic BP as 145, not 165."
       },
       "4:decoy_wrong_chw_quiet": {
         "found": false,
-        "reason": "The briefing does not state that chw-004 stopped after Tuesday; it instead flags chw-001 for the mid-week activity gap."
+        "reason": "The briefing attributes the mid-week activity gap to chw-001, not chw-004, and does not state that chw-004 had visits only Monday and Tuesday."
       },
       "4:decoy_wrong_ward_cluster": {
         "found": false,
-        "reason": "The briefing places the 8 malaria fever cases in Lurambi, not the true ward Butere."
+        "reason": "The briefing places the 8 malaria fever cases in Lurambi instead of the required Butere ward."
       },
       "4:decoy_wrong_location_count": {
         "found": false,
-        "reason": "The briefing reports 14 visits without location, not the true finding of 20."
+        "reason": "The briefing reports 14 visits without location, contradicting the finding of 20."
       },
       "4:decoy_wrong_death_count": {
         "found": false,
-        "reason": "The briefing reports 3 visits after recorded death, but the finding is 5 visits."
+        "reason": "The briefing reports 3 visits after recorded death, contradicting the finding of 5."
       },
       "4:decoy_wrong_bp": {
         "found": false,
-        "reason": "The briefing lists overdue pregnant patients but reports the relevant last systolic BP as 145, not 165."
+        "reason": "The briefing mentions an overdue pregnant patient but gives last systolic BP as 145, not 165."
       },
       "5:decoy_wrong_chw_quiet": {
         "found": false,
-        "reason": "The briefing does not state that chw-004 stopped after Tuesday and instead flags chw-001 as the mid-week activity gap."
+        "reason": "The briefing does not state that chw-004 worked Monday\u2013Tuesday and had no visits Wednesday\u2013Friday, and instead flags a different CHW for a mid-week gap."
       },
       "5:decoy_wrong_ward_cluster": {
         "found": false,
-        "reason": "The briefing reports the malaria fever cluster in Lurambi, but the finding is specifically in Butere ward."
+        "reason": "The briefing places the 8 malaria fever cases in Lurambi, but the finding is specifically in Butere ward."
       },
       "5:decoy_wrong_location_count": {
         "found": false,
-        "reason": "The briefing reports 14 missing visit locations, not the true finding of 20."
+        "reason": "The briefing reports 14 missing visit locations, not the finding that 20 visits lacked a location."
       },
       "5:decoy_wrong_death_count": {
         "found": false,
-        "reason": "The briefing reports 3 visits after recorded death, but the finding requires 5."
+        "reason": "The briefing reports 3 visits after recorded death, contradicting the finding of 5."
       },
       "5:decoy_wrong_bp": {
         "found": false,
-        "reason": "The briefing lists an overdue pregnant patient but gives last systolic BP as 145, not the required 165."
+        "reason": "The briefing reports the overdue pregnant patient's last systolic BP as 145, not 165."
+      }
+    },
+    "anthropic/claude-haiku-5.5": {
+      "1:chw_disengagement": {
+        "found": true,
+        "reason": "The briefing flags chw-001 as last active 2026-11-10 and missing three working days before the team's last active date, which matches the mid-week stop after Tuesday, and it gives an action (follow up on availability)."
+      },
+      "1:baseline_trap": {
+        "found": true,
+        "reason": "The briefing identifies chw-002 as starting late with only two active weekdays and says the low count should not be read as low effort, which conveys that the low total reflects short history rather than disengagement and avoids ranking them as the worst performer."
+      },
+      "1:fever_cluster": {
+        "found": true,
+        "reason": "The Lurambi bullet names chw-003, the 8 patients with their temperatures (all at least 38.7\u00b0C), the 2026-11-09 to 2026-11-13 window, and malaria diagnoses, and recommends cluster verification, with no contradictions."
+      },
+      "1:overdue_anc": {
+        "found": true,
+        "reason": "The briefing names all three overdue pregnant patients, notes they have not been seen since their return dates, and reports Namukhula Adhiambo's systolic BP of 145, with an action to prioritize her review and follow up on all three."
+      },
+      "1:missing_location": {
+        "found": true,
+        "reason": "The data quality section states that 14 visits in the week of 9-15 Nov lack locations, itemizes them by CHW and district, and tells the supervisor to return them for correction, which matches the finding."
+      },
+      "1:visits_after_death": {
+        "found": true,
+        "reason": "The 'Records after patient death' section names all three patients (Musungu Juma, Njoroge Kamau, Wafula Nafula), gives the matching death and visit dates for the week of 9 Nov, and tells the supervisor to verify and correct those records."
+      },
+      "1:child_danger_signs": {
+        "found": true,
+        "reason": "The first bullet names Khaemba Wanjala, chw-005, the 39.1\u00b0C temperature and 62 breaths per minute, and calls for same-day referral with confirmation today, which matches the finding without contradicting it."
+      },
+      "1:decoy_wrong_chw_quiet": {
+        "found": false,
+        "reason": "The briefing never reports that chw-004 logged visits only on Monday and Tuesday of the week of 9 Nov with none Wednesday to Friday; chw-004 appears only in the missing-location data quality item, and the activity exceptions cover only chw-001 and chw-002."
+      },
+      "1:decoy_wrong_ward_cluster": {
+        "found": false,
+        "reason": "The briefing reports a malaria fever cluster in Lurambi, not the 8-patient cluster in Butere ward, and never mentions Butere fever cases, so the finding is not stated."
+      },
+      "1:decoy_wrong_location_count": {
+        "found": false,
+        "reason": "The briefing reports 14 visits missing locations, which contradicts the finding that 20 visits were saved without a location."
+      },
+      "1:decoy_wrong_death_count": {
+        "found": false,
+        "reason": "The briefing reports 3 records logged after patient death, while the finding states 5 visits, so the count contradicts the known fact."
+      },
+      "1:decoy_wrong_bp": {
+        "found": false,
+        "reason": "The briefing reports Namukhula Adhiambo's systolic BP as 145.0, not the 165 in the finding, and never mentions a systolic BP of 165."
+      },
+      "2:chw_disengagement": {
+        "found": true,
+        "reason": "The briefing names chw-001 as having stopped early, with last activity on 2026-11-10 and three missed working days before 2026-11-13, and it directs a call to them, which matches the finding without contradicting it."
+      },
+      "2:baseline_trap": {
+        "found": true,
+        "reason": "The briefing says chw-002 started late, was first active 2026-11-12 with only 2 active weekdays, and recommends onboarding support rather than treating them as a disengagement case, which conveys the short-history reading without ranking them as worst performer."
+      },
+      "2:fever_cluster": {
+        "found": true,
+        "reason": "The first bullet names Lurambi, all 8 patients, chw-003, the malaria diagnoses, and the 2026-11-09 to 11-13 window, with no contradictions, and tells the supervisor to act on it today, though it omits the 38.5 C threshold."
+      },
+      "2:overdue_anc": {
+        "found": true,
+        "reason": "The briefing names all three overdue pregnant patients with correct overdue days and CHWs, flags Namukhula Adhiambo's systolic BP of 145.0, and calls for urgent follow-up today, with no contradiction of the given facts."
+      },
+      "2:missing_location": {
+        "found": true,
+        "reason": "The briefing states the 14 visits missing location for the week of 2026-11-09 to 2026-11-15, with per-CHW counts that sum to 14, and gives a clear action to have CHWs correct locations before submission."
+      },
+      "2:visits_after_death": {
+        "found": true,
+        "reason": "The briefing states that 3 visits were logged after recorded deaths for Musungu Juma, Wafula Nafula, and Njoroge Kamau, with visit dates (2026-11-10 and 2026-11-12) inside the week of 9 Nov, and it tells the supervisor to reconcile records."
+      },
+      "2:child_danger_signs": {
+        "found": true,
+        "reason": "The briefing names Khaemba Wanjala, chw-005, the 39.1\u00b0C temperature and 62 respiratory rate, and calls for same-day referral, which matches the finding and is actionable."
+      },
+      "2:decoy_wrong_chw_quiet": {
+        "found": false,
+        "reason": "The briefing never says chw-004 stopped logging visits after Tuesday of the week of 9 Nov; chw-004 appears only in the missing-location data-quality line, and the stopped-early exception is attributed to chw-001 instead."
+      },
+      "2:decoy_wrong_ward_cluster": {
+        "found": false,
+        "reason": "The briefing reports an 8-patient fever and malaria cluster in Lurambi, not Butere, and never mentions Butere, so the finding about the correct ward is missing."
+      },
+      "2:decoy_wrong_location_count": {
+        "found": false,
+        "reason": "The briefing reports 14 visits missing location, not the 20 unlocated visits stated in the finding, so the key number is wrong."
+      },
+      "2:decoy_wrong_death_count": {
+        "found": false,
+        "reason": "The briefing reports 3 visits logged after patient death, but the finding is that 5 such visits exist, so the number is wrong."
+      },
+      "2:decoy_wrong_bp": {
+        "found": false,
+        "reason": "The briefing lists Namukhula Adhiambo as an overdue pregnant patient but gives her last systolic BP as 145.0, not the 165 in the finding, so the specific finding is not reported correctly."
+      },
+      "3:chw_disengagement": {
+        "found": true,
+        "reason": "The briefing states that chw-001 was last active 2026-11-10 with the three working days after it missing, and directs a check-in on the gap, which matches the finding without contradiction, though it omits the name Mary Wanjiku and relies on the ID."
+      },
+      "3:baseline_trap": {
+        "found": true,
+        "reason": "The briefing names chw-002 and states that the 20 encounters reflect a late start (first active 2026-11-12, only two active weekdays), so the low count should not be read as low effort, which matches the finding."
+      },
+      "3:fever_cluster": {
+        "found": true,
+        "reason": "The briefing names the Lurambi fever/malaria cluster, lists all eight patients with temperatures at or above 38.5 C, identifies chw-003 as the CHW involved, and directs a malaria response, with no contradictions of the finding."
+      },
+      "3:overdue_anc": {
+        "found": true,
+        "reason": "The briefing names all three overdue pregnant patients with their CHWs and days overdue, notes Namukhula Adhiambo's systolic BP of 145, and assigns immediate follow-up, with no contradicting facts."
+      },
+      "3:missing_location": {
+        "found": true,
+        "reason": "The briefing states the 14 visits saved without a location in the week of 9 Nov, with a per-CHW breakdown that sums to 14, and gives a clear action to correct the records before close of day."
+      },
+      "3:visits_after_death": {
+        "found": true,
+        "reason": "The data-quality bullet states that 3 visits occurred after the recorded death date for Musungu Juma, Njoroge Kamau, and Wafula Nafula, names the CHWs involved, and directs them to correct the records, which matches the finding."
+      },
+      "3:child_danger_signs": {
+        "found": true,
+        "reason": "The briefing names Khaemba Wanjala, chw-005, the 39.1\u00b0C temperature, the respiratory rate of 62, and the need for urgent referral, and tells the supervisor to call chw-005 now, with no contradicting facts."
+      },
+      "3:decoy_wrong_chw_quiet": {
+        "found": false,
+        "reason": "The briefing never reports chw-004's activity gap (visits on Monday and Tuesday, then none Wednesday to Friday); chw-004 appears only as having two visits saved without location, which is a different issue."
+      },
+      "3:decoy_wrong_ward_cluster": {
+        "found": false,
+        "reason": "The briefing reports the 8-case fever/malaria cluster in Lurambi, not Butere, so it names the wrong ward for the finding and does not report the Butere cluster."
+      },
+      "3:decoy_wrong_location_count": {
+        "found": false,
+        "reason": "The briefing reports 14 unlocated visits for the week, not the 20 in the finding, so it states the wrong number the finding depends on."
+      },
+      "3:decoy_wrong_death_count": {
+        "found": false,
+        "reason": "The briefing reports 3 visits logged after a recorded death, but the finding is 5, so the key count is wrong."
+      },
+      "3:decoy_wrong_bp": {
+        "found": false,
+        "reason": "The briefing reports Namukhula Adhiambo's last systolic BP as 145, not the 165 the finding requires, so the specific finding is not stated and the given detail contradicts it."
+      },
+      "4:chw_disengagement": {
+        "found": true,
+        "reason": "The briefing identifies chw-001 as having stopped early with last activity on 2026-11-10 and three missed working days, matching the finding and prompting the supervisor to contact that CHW, though it omits the name Mary Wanjiku."
+      },
+      "4:baseline_trap": {
+        "found": true,
+        "reason": "The briefing ties chw-002's low count to being started late with only two active weekdays and recommends onboarding support rather than treating them as a performance problem, though it never states outright that the total reflects short history."
+      },
+      "4:fever_cluster": {
+        "found": true,
+        "reason": "The briefing states the Lurambi fever cluster of 8 malaria-diagnosed cases seen by chw-003, lists all 8 correct patient names, gives the five-day window, and recommends verifying the cluster, which matches the finding without contradiction, though it omits the 38.5 C threshold."
+      },
+      "4:overdue_anc": {
+        "found": true,
+        "reason": "The briefing names all three overdue pregnant patients with correct return dates and days overdue, and flags Namukhula Adhiambo's systolic BP of 145.0 with an urgent follow-up action, so a supervisor would act on it."
+      },
+      "4:missing_location": {
+        "found": true,
+        "reason": "The briefing states that 14 visits in the week of 9 to 15 November were saved without location, and its per-CHW breakdown sums to 14 with a clear action to correct records and enable location capture."
+      },
+      "4:visits_after_death": {
+        "found": true,
+        "reason": "The final bullet names all three deceased patients (Musungu Juma, Njoroge Kamau, Wafula Nafula) as having visits logged in the week of 9 Nov after their recorded deaths, and it directs an audit of those records, with no contradiction of the given facts."
+      },
+      "4:child_danger_signs": {
+        "found": true,
+        "reason": "The briefing names Khaemba Wanjala, chw-005, age 53 months, temperature 39.1\u00b0C and respiratory rate 62, and directs the supervisor to confirm the same-day referral, which matches the finding without contradiction."
+      },
+      "4:decoy_wrong_chw_quiet": {
+        "found": false,
+        "reason": "The briefing never reports that chw-004 stopped logging visits after Tuesday of the week of 9 Nov; chw-004 appears only in the missing-location item, and the mid-week activity gap is attributed to chw-001 instead."
+      },
+      "4:decoy_wrong_ward_cluster": {
+        "found": false,
+        "reason": "The briefing reports the 8-case malaria fever cluster in Lurambi, not Butere ward, so it names the wrong place for the finding."
+      },
+      "4:decoy_wrong_location_count": {
+        "found": false,
+        "reason": "The briefing reports 14 visits saved without location, but the finding is that 20 were saved without a location, so the count is wrong."
+      },
+      "4:decoy_wrong_death_count": {
+        "found": false,
+        "reason": "The finding is that 5 visits were logged after recorded deaths, but the briefing reports only 3 such visits, which contradicts the stated count."
+      },
+      "4:decoy_wrong_bp": {
+        "found": false,
+        "reason": "The briefing names Namukhula Adhiambo as an overdue pregnant patient but reports her last systolic BP as 145.0, not the 165 the finding requires, so the key detail is wrong."
+      },
+      "5:chw_disengagement": {
+        "found": true,
+        "reason": "The briefing flags chw-001 with last activity on 2026-11-10 and three missed working days through 2026-11-13, which matches the mid-week stop (Mon and Tue logged, Wed to Fri missing) and tells the supervisor to contact them."
+      },
+      "5:baseline_trap": {
+        "found": true,
+        "reason": "The activity-exceptions bullet states chw-002 started late (first active 2026-11-12, only 2 active weekdays) and explicitly says not to treat them as low effort, which matches the finding without contradicting any given facts."
+      },
+      "5:fever_cluster": {
+        "found": true,
+        "reason": "The briefing clearly reports the Lurambi fever cluster: 8 malaria-diagnosed fever cases seen by chw-003 within five days, with all eight named and temperatures consistent with the 38.5\u00b0C threshold, and it directs a malaria response."
+      },
+      "5:overdue_anc": {
+        "found": true,
+        "reason": "The briefing flags all three overdue pregnant patients (Namukhula Adhiambo, Nafula Kamau, Naliaka Barasa) with their overdue days and the SBP 145 for Namukhula, and calls for visits, with no contradiction of the given facts."
+      },
+      "5:missing_location": {
+        "found": true,
+        "reason": "The briefing states the 14 visits without a location for the week of 9 Nov, with per-CHW counts that sum to 14, and gives a clear action (have CHWs correct locations), with no contradiction of the finding."
+      },
+      "5:visits_after_death": {
+        "found": true,
+        "reason": "The final bullet names all three deceased patients (Musungu Juma, Njoroge Kamau, Wafula Nafula) with their visit dates in the 9\u201315 Nov week and a clear action to verify and clean the registry, with no contradicting facts."
+      },
+      "5:child_danger_signs": {
+        "found": true,
+        "reason": "The briefing names Khaemba Wanjala, seen by chw-005 with fever 39.1\u00b0C and respiratory rate 62/min, and directs the supervisor to confirm referral completion immediately, with no conflicting facts."
+      },
+      "5:decoy_wrong_chw_quiet": {
+        "found": false,
+        "reason": "The briefing mentions chw-004 only as having 2 missing visit locations and never reports that chw-004 stopped logging visits after Tuesday 10 Nov, so the finding is absent."
+      },
+      "5:decoy_wrong_ward_cluster": {
+        "found": false,
+        "reason": "The briefing reports the malaria fever cluster in Lurambi rather than Butere ward, so it names the wrong place for the finding."
+      },
+      "5:decoy_wrong_location_count": {
+        "found": false,
+        "reason": "The briefing reports 14 unlocated visits for the week, which contradicts the finding that 20 visits were saved without a location."
+      },
+      "5:decoy_wrong_death_count": {
+        "found": false,
+        "reason": "The briefing reports 3 visits after recorded death, but the known finding is 5, so the key number is wrong."
+      },
+      "5:decoy_wrong_bp": {
+        "found": false,
+        "reason": "The briefing reports Namukhula Adhiambo's last systolic BP as 145, not the 165 in the finding, and does not mention a 165 reading for any overdue pregnant patient."
       }
     }
   }

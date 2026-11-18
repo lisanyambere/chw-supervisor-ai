@@ -52,7 +52,7 @@ It did not start there. The first version scored 18 of 21 over three runs. Readi
 
 Building the evaluation also exposed bugs the agents could not have shown me. The data loader had been silently discarding most of the planted situations, so an earlier version of the agent could only ever count visits. And OpenMRS reads "before 14 November" as "before the end of 14 November", which double-counted visits in the daily totals.
 
-What these numbers do not show: five runs over seven planted situations is a small sample, and every planted situation is one the tools were built to find. The judge is the same model as the agents, so I tested whether it simply says "found" to everything: alongside the real findings I gave it 25 decoys, false findings that change the one detail that matters (the wrong worker, the wrong ward, the wrong count). It rejected all 25 and accepted all 35 real ones. That is still a model checking a model, not a person with community-health experience. The figure check proves a number came from the data, not that it is attached to the right person.
+What these numbers do not show: five runs over seven planted situations is a small sample, and every planted situation is one the tools were built to find. The judge is the same model as the agents, so I tested whether it simply says "found" to everything: alongside the real findings I gave it 25 decoys, false findings that change the one detail that matters (the wrong worker, the wrong ward, the wrong count). It rejected all 25 and accepted all 35 real ones. A judge from a different model family, Claude Haiku 5.5, given the same 60 items, reached the same verdict on every one. That is still models checking a model, not a person with community-health experience, and the task is an easy one for a judge: the briefings state their findings plainly. The figure check proves a number came from the data, not that it is attached to the right person.
 
 ## Observability and cost
 
@@ -73,6 +73,6 @@ The traces changed the design. The timeline shows the three specialists running 
 ## What's next
 
 - Have the lead analyst write the answer card directly, removing the formatting call that costs a third of each briefing.
-- Have judges from other model families (Claude, Gemini) grade the same briefings and decoys, and report how often they agree with mine.
+- Have someone who supervises CHWs rate a sample of briefings, the one check no model can stand in for.
 - Plant situations the tools were not built for, to see what the agents miss.
 - Package it to run with one command, then try it with someone who supervises CHWs.
